@@ -1,0 +1,11 @@
+# Backup format v1
+
+`.wwbackup` is a UTF-8 JSON envelope with `format: word-within-encrypted`, `version: 1`, `kdf: PBKDF2-SHA256`, `iterations: 600000`, a fresh random 16-byte base64 salt, a fresh random 12-byte base64 IV, and base64 AES-256-GCM ciphertext including its authentication tag. Additional authenticated data is the literal UTF-8 `word-within:1`. Web Crypto performs derivation and authenticated encryption. Each export derives a fresh key from the supplied password and salt. A minimum of 12 characters is enforced; use a unique, strong passphrase.
+
+The decrypted manifest is `{format:"word-within",version:1,created:<epoch milliseconds>,records:[...]}`. Every record contains a stable `id`, entity `kind`, and typed `data`. Blobs are encoded as `{__blob:true,type:<MIME>,base64:<content>}` before encryption. The immutable KJV corpus is re-provisioned from the app rather than duplicated in the backup. Imported translations, visual cards and audio are included. Never edit an encrypted file manually.
+
+Restore verifies the encryption envelope, authentication tag, manifest version, duplicate IDs, canonical references, data types/ranges and media envelopes before presenting a preview. Wrong passwords and modifications fail without touching IndexedDB. Confirmation performs all writes in one transaction. Merge preserves existing records with matching IDs; it never combines conflicting histories under a new ID. Replacement is explicitly labelled and requires confirmation. Review attempts retain their identifiers so repeated imports do not duplicate them.
+
+There is no recovery service, cloud copy or password reset. If a password is lost, that backup is unreadable. Browser storage can disappear. Save exports in Files or another location you control and manually transfer them to your other devices. Download initiation cannot prove a user retained the file; the UI labels its status as export requested. Verify the file and restore on a fresh installation.
+
+Where the File System Access API is available, users can choose a backup file and authorize hourly encrypted writes while the app remains open. The password and file handle remain in session memory only. This is unavailable on most Apple browsers and does not run after the app is closed. The default Apple workflow is manual export; calendar reminders can help.
