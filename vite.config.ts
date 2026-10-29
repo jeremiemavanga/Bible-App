@@ -16,8 +16,8 @@ export default defineConfig({
         short_name: "Word Within",
         description:
           "Scripture held in the heart. Private, offline Bible memorization.",
-        theme_color: "#102d27",
-        background_color: "#0b1d19",
+        theme_color: "#1d2821",
+        background_color: "#141b17",
         display: "standalone",
         start_url: ".",
         scope: ".",

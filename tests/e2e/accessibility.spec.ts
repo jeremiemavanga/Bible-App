@@ -1,3 +1,4 @@
+import { navigate } from "./navigation";
 import { test, expect } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
 test("responsive screens, keyboard access, and automated WCAG checks", async ({
@@ -7,7 +8,7 @@ test("responsive screens, keyboard access, and automated WCAG checks", async ({
   page.on("request", (r) => requests.push(r.url()));
   await page.goto("/");
   await expect(
-    page.getByRole("heading", { name: "Abide in the Word." }),
+    page.getByRole("heading", { name: "Today's Scripture" }),
   ).toBeVisible();
   await page.keyboard.press("Tab");
   await expect(page.locator(":focus")).toHaveAttribute("href", "#main");
@@ -20,10 +21,11 @@ test("responsive screens, keyboard access, and automated WCAG checks", async ({
     "Meditation",
     "Listen",
     "Settings",
+    "Progress",
   ]) {
-    await page.getByRole("button", { name, exact: true }).click();
+    await navigate(page, name);
     const result = await new AxeBuilder({ page })
-      .withTags(["wcag2a", "wcag2aa", "wcag21aa"])
+      .withTags(["wcag2a", "wcag2aa", "wcag21aa", "wcag22aa"])
       .analyze();
     expect(
       result.violations.map((v) => ({
@@ -31,13 +33,17 @@ test("responsive screens, keyboard access, and automated WCAG checks", async ({
         nodes: v.nodes.map((n) => n.target),
       })),
     ).toEqual([]);
+    await page.evaluate(
+      () => (document.documentElement.style.fontSize = "160%"),
+    );
     expect(
       await page.evaluate(
         () => document.documentElement.scrollWidth <= innerWidth + 1,
       ),
     ).toBe(true);
+    await page.evaluate(() => (document.documentElement.style.fontSize = ""));
   }
-  await page.getByRole("button", { name: "Today", exact: true }).click();
+  await navigate(page, "Today");
   await page.screenshot({
     path: `docs/validated-${test.info().project.name}.png`,
     fullPage: true,

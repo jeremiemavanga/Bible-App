@@ -136,3 +136,17 @@ it("handles a long exact recitation without allocating a quadratic matrix", () =
   const text = Array(20000).fill("word").join(" ");
   expect(grade(text, text).accuracy).toBe(1);
 });
+
+it("provides ordered, labelled word feedback including correctly recalled words", () => {
+  const result = grade("Thy word have I hid", "Thy truth have hid");
+  expect(result.alignment.map((w) => w.type)).toEqual([
+    "correct",
+    "substitution",
+    "correct",
+    "omission",
+    "correct",
+  ]);
+  expect(
+    result.alignment.filter((w) => w.type === "correct").map((w) => w.actual),
+  ).toEqual(["thy", "have", "hid"]);
+});

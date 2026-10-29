@@ -25,3 +25,9 @@ Audio imports accept locally selected browser-supported audio files below 100 MB
 ## Updating and hosting
 
 `npm run build` produces a static `dist/` with an installable manifest, Apple touch icon and generated service worker. The entire core and KJV package are precached. First provisioning requires connectivity. The offline indicator verifies the versioned precache rather than relying on a port or service-worker registration alone. An update prompt lets the user finish work before reloading. Use HTTPS; serve the app at the origin root. Do not configure a backend for notes. See [APPLE-INSTALL.md](APPLE-INSTALL.md).
+
+## Approved visual design
+
+`VISUAL-SPECIFICATION.md` is the authoritative companion to the functional specification. CSS exposes the exact forest/ivory/sage palette, spacing and radius tokens. Georgia is the offline system-serif alternative and the interface uses system sans-serif; no fonts are downloaded. Lucide icons are locally bundled with retained ISC notices. The app uses five primary destinations, a 240px desktop sidebar, adaptive iPad navigation and a safe-area-aware iPhone bottom bar. Projects/Practice/Chapter Code share Memory; Settings and Listen are in More. Today foregrounds Scripture while Progress holds statistics. Reader text size, quiet mode, accessible per-word feedback, a sequential memory atlas, a persistent portalled audio player, native destructive-action confirmations and reduced-motion support carry the same design across existing features.
+
+For GitHub Pages, build and preview with the same base: `npm run build -- --base=/Bible-App/` and `npm run preview -- --base=/Bible-App/ --port 4175`. Root development/testing commands remain unchanged.

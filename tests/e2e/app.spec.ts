@@ -1,3 +1,4 @@
+import { navigate } from "./navigation";
 import { test, expect } from "@playwright/test";
 test("offline Scripture, practice, anchors, reflection, and clean-context encrypted restore", async ({
   page,
@@ -8,7 +9,7 @@ test("offline Scripture, practice, anchors, reflection, and clean-context encryp
   page.on("pageerror", (e) => errors.push(e.message));
   await page.goto("/");
   await expect(
-    page.getByRole("heading", { name: "Abide in the Word." }),
+    page.getByRole("heading", { name: "Today's Scripture" }),
   ).toBeVisible();
   await expect(
     page.getByRole("banner").getByText("Offline ready", { exact: false }),
@@ -17,7 +18,7 @@ test("offline Scripture, practice, anchors, reflection, and clean-context encryp
     path: "test-results/today-" + test.info().project.name + ".png",
     fullPage: true,
   });
-  await page.getByRole("button", { name: "Bible", exact: true }).click();
+  await navigate(page, "Bible");
   await page.getByLabel("Search reference or words").fill("Revelation 22:21");
   await expect(
     page.getByText(
@@ -35,7 +36,7 @@ test("offline Scripture, practice, anchors, reflection, and clean-context encryp
   await context.setOffline(true);
   await page.reload();
   await expect(
-    page.getByRole("heading", { name: "Abide in the Word." }),
+    page.getByRole("heading", { name: "Today's Scripture" }),
   ).toBeVisible();
   await page
     .getByRole("button", { name: "Continue Practice", exact: false })
@@ -56,12 +57,12 @@ test("offline Scripture, practice, anchors, reflection, and clean-context encryp
   await expect(
     page.getByRole("button", { name: "Review recorded" }),
   ).toBeDisabled();
-  await page.getByRole("button", { name: "Chapter Code", exact: true }).click();
+  await navigate(page, "Chapter Code");
   await page.getByLabel("Location anchor").fill("My doorway");
   await page.getByLabel("Keyword or word cue").fill("hid");
   await page.getByRole("button", { name: "Save memory anchor" }).click();
   await expect(page.getByText("My doorway →")).toBeVisible();
-  await page.getByRole("button", { name: "Meditation", exact: true }).click();
+  await navigate(page, "Meditation");
   await page
     .getByLabel("Private reflection")
     .fill("A private prayer preserved offline.");
@@ -69,7 +70,7 @@ test("offline Scripture, practice, anchors, reflection, and clean-context encryp
   await expect(
     page.getByText("A private prayer preserved offline.", { exact: true }),
   ).toBeVisible();
-  await page.getByRole("button", { name: "Settings", exact: true }).click();
+  await navigate(page, "Settings");
   await page
     .getByLabel("Backup password")
     .fill("a long private test passphrase");
@@ -87,7 +88,7 @@ test("offline Scripture, practice, anchors, reflection, and clean-context encryp
   const fresh = await browser.newContext();
   const clean = await fresh.newPage();
   await clean.goto("/");
-  await clean.getByRole("button", { name: "Settings", exact: true }).click();
+  await navigate(clean, "Settings");
   await clean
     .getByLabel("Backup password")
     .fill("a long private test passphrase");
@@ -104,7 +105,7 @@ test("offline Scripture, practice, anchors, reflection, and clean-context encryp
   await expect(
     clean.getByText("Backup restored.", { exact: false }),
   ).toBeVisible();
-  await clean.getByRole("button", { name: "Meditation", exact: true }).click();
+  await navigate(clean, "Meditation");
   await expect(
     clean.getByText("A private prayer preserved offline.", { exact: true }),
   ).toBeVisible();
@@ -115,7 +116,7 @@ test("projects, six methods, topics, and licensed audio controls", async ({
   page,
 }) => {
   await page.goto("/");
-  await page.getByRole("button", { name: "Projects", exact: true }).click();
+  await navigate(page, "Projects");
   await page.getByLabel("Name", { exact: true }).fill("A rooted heart");
   await page
     .getByLabel("References (separate passages")
@@ -140,7 +141,7 @@ test("projects, six methods, topics, and licensed audio controls", async ({
       page.getByLabel("Type or transcribe your recall"),
     ).toBeVisible();
   }
-  await page.getByRole("button", { name: "Listen", exact: true }).click();
+  await navigate(page, "Listen");
   await page
     .getByLabel("Narration source and permission")
     .fill("Test recording created by the test suite");
@@ -156,6 +157,15 @@ test("projects, six methods, topics, and licensed audio controls", async ({
   await expect(page.locator("audio")).toHaveJSProperty("playbackRate", 1.5);
   await page.getByLabel("Repeat", { exact: true }).selectOption("track");
   await expect(page.locator("audio")).toHaveJSProperty("loop", true);
+  await page.locator("audio").evaluate((a: HTMLAudioElement) => a.play());
+  await navigate(page, "Today");
+  await expect(
+    page.getByRole("complementary", { name: "Current Scripture recording" }),
+  ).toBeVisible();
+  await expect(page.locator("audio")).toHaveJSProperty("paused", false);
+  await expect(
+    page.getByRole("button", { name: "Previous recording", exact: true }),
+  ).toBeVisible();
 });
 function makeWav() {
   const b = Buffer.alloc(16044);
@@ -178,7 +188,7 @@ test("whole chapter recitation persists independent verse/chapter reviews, trans
   page,
 }) => {
   await page.goto("/");
-  await page.getByRole("button", { name: "Bible", exact: true }).click();
+  await navigate(page, "Bible");
   await page.getByLabel("Book", { exact: true }).selectOption("19");
   await page.getByLabel("Chapter", { exact: true }).selectOption("117");
   await page
@@ -234,7 +244,7 @@ test("whole chapter recitation persists independent verse/chapter reviews, trans
           e.data.referenceAccuracy === 1,
       ),
   ).toBe(true);
-  await page.getByRole("button", { name: "Chapter Code", exact: true }).click();
+  await navigate(page, "Chapter Code");
   await page.getByLabel("Location anchor").fill("Garden gate");
   await page
     .getByLabel("Optional visual card")
@@ -244,7 +254,7 @@ test("whole chapter recitation persists independent verse/chapter reviews, trans
     page.getByRole("img", { name: "Personal memory association" }),
   ).toBeVisible();
   await page.reload();
-  await page.getByRole("button", { name: "Chapter Code", exact: true }).click();
+  await navigate(page, "Chapter Code");
   await expect(page.getByText("Garden gate →")).toBeVisible();
   await expect(
     page.getByRole("img", { name: "Personal memory association" }),
@@ -259,7 +269,7 @@ test("all 66 books navigate and search offline", async ({ page, context }) => {
     page.getByRole("banner").getByText("Offline ready", { exact: false }),
   ).toBeVisible();
   await context.setOffline(true);
-  await page.getByRole("button", { name: "Bible", exact: true }).click();
+  await navigate(page, "Bible");
   for (const book of books) {
     await page
       .getByLabel("Book", { exact: true })
@@ -287,7 +297,7 @@ test("authorized comparison packages never change the KJV memory target", async 
       for (let i = 0; i < ch.length; i++)
         ch[i] = "Synthetic comparison fixture, not a Bible translation.";
   await page.goto("/");
-  await page.getByRole("button", { name: "Bible", exact: true }).click();
+  await navigate(page, "Bible");
   await page
     .getByText("Translation packages and permissions", { exact: true })
     .click();
@@ -295,19 +305,17 @@ test("authorized comparison packages never change the KJV memory target", async 
     page.getByLabel("Import authorized JSON package"),
   ).toBeDisabled();
   await page.getByLabel("I have permission for this digital text").check();
-  await page
-    .getByLabel("Import authorized JSON package")
-    .setInputFiles({
-      name: "synthetic-package.json",
-      mimeType: "application/json",
-      buffer: Buffer.from(
-        JSON.stringify({
-          license:
-            "Original synthetic test fixture; no third-party translation content.",
-          books,
-        }),
-      ),
-    });
+  await page.getByLabel("Import authorized JSON package").setInputFiles({
+    name: "synthetic-package.json",
+    mimeType: "application/json",
+    buffer: Buffer.from(
+      JSON.stringify({
+        license:
+          "Original synthetic test fixture; no third-party translation content.",
+        books,
+      }),
+    ),
+  });
   await expect(page.getByLabel("Compare translation")).toHaveValue("RVR1960");
   await expect(
     page

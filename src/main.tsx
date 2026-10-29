@@ -1,5 +1,20 @@
 import React, { useState, useEffect, useRef } from "react";
 import { createRoot } from "react-dom/client";
+import { createPortal } from "react-dom";
+import {
+  BookOpen,
+  CalendarDays,
+  Library,
+  Brain,
+  Leaf,
+  ChartNoAxesCombined,
+  Menu,
+  Headphones,
+  Settings2,
+  ArrowRight,
+  ChevronLeft,
+  ChevronRight,
+} from "lucide-react";
 import { registerSW } from "virtual:pwa-register";
 import { db, put, loadBible, download } from "./db";
 import { encrypt, decrypt } from "./backup";
@@ -43,6 +58,8 @@ const defaults: NotificationPreference = {
   saturday: true,
 };
 type Page =
+  | "Memory"
+  | "Progress"
   | "Today"
   | "Bible"
   | "Projects"
@@ -71,7 +88,8 @@ function App() {
     [error, setError] = useState(""),
     [offline, setOffline] = useState(!navigator.onLine),
     [ready, setReady] = useState(false),
-    [update, setUpdate] = useState(false);
+    [update, setUpdate] = useState(false),
+    [sidebarOpen, setSidebarOpen] = useState(false);
   const refresh = async () => setRecords(await db.records.toArray());
   const run = async (
     fn: () => Promise<unknown>,
@@ -90,7 +108,7 @@ function App() {
     void run(async () => {
       setBooks(await loadBible());
       await refresh();
-    }, "KJV ready on this device.");
+    }, "");
     const on = () => setOffline(!navigator.onLine),
       upd = () => setUpdate(true);
     window.addEventListener("online", on);
@@ -158,6 +176,8 @@ function App() {
     go: (p, recall = false) => {
       setRecallOnly(recall);
       setPage(p);
+      setSidebarOpen(false);
+      window.scrollTo({ top: 0, behavior: "instant" });
     },
     recallOnly,
     run,
@@ -177,9 +197,11 @@ function App() {
             setPage("Today");
           }}
         >
-          <span className="brand-icon" aria-hidden="true">
-            ♧
-          </span>
+          <BookOpen
+            className="brand-icon"
+            aria-hidden="true"
+            strokeWidth={1.5}
+          />
           <span>
             The Word Within<small>HIDE HIS WORD IN YOUR HEART</small>
           </span>
@@ -194,36 +216,72 @@ function App() {
                 ? "Development mode"
                 : "Preparing offline cache…"}
         </span>
+        <button
+          className="sidebar-toggle icon-button"
+          aria-label="Toggle sidebar"
+          aria-expanded={sidebarOpen}
+          onClick={() => setSidebarOpen(!sidebarOpen)}
+        >
+          <Menu aria-hidden="true" />
+        </button>
+        <details className="secondary-menu">
+          <summary aria-label="More options">
+            <Menu size={20} aria-hidden="true" />
+            <span>More</span>
+          </summary>
+          <div>
+            {(
+              [
+                ["Listen", Headphones],
+                ["Settings", Settings2],
+              ] as const
+            ).map(([name, Icon]) => (
+              <button
+                key={name}
+                onClick={(e) => {
+                  ctx.go(name);
+                  const menu = e.currentTarget.closest("details");
+                  menu?.removeAttribute("open");
+                  menu?.querySelector("summary")?.focus();
+                }}
+              >
+                <Icon size={18} aria-hidden="true" />
+                {name}
+              </button>
+            ))}
+          </div>
+        </details>
       </header>
-      <div className="shell">
+      <div className={"shell" + (sidebarOpen ? " sidebar-open" : "")}>
         <nav aria-label="Main navigation">
           {(
             [
-              "Today",
-              "Bible",
-              "Projects",
-              "Practice",
-              "Chapter Code",
-              "Meditation",
-              "Listen",
-              "Settings",
-            ] as Page[]
-          ).map((p, i) => (
-            <button
-              key={p}
-              aria-current={page === p ? "page" : undefined}
-              onClick={() => setPage(p)}
-            >
-              <span aria-hidden>
-                {["◈", "▤", "◷", "▷", "⌘", "❧", "♫", "⚙"][i]}
-              </span>
-              {p}
-            </button>
-          ))}
+              { name: "Today", page: "Today", Icon: CalendarDays },
+              { name: "Bible", page: "Bible", Icon: Library },
+              { name: "Memory", page: "Memory", Icon: Brain },
+              { name: "Meditate", page: "Meditation", Icon: Leaf },
+              { name: "Progress", page: "Progress", Icon: ChartNoAxesCombined },
+            ] as const
+          ).map(({ name, page: target, Icon }) => {
+            const active =
+              page === target ||
+              (target === "Memory" &&
+                ["Projects", "Practice", "Chapter Code"].includes(page));
+            return (
+              <button
+                key={name}
+                aria-current={active ? "page" : undefined}
+                onClick={() => ctx.go(target)}
+              >
+                <Icon aria-hidden="true" strokeWidth={1.65} />
+                <span>{name}</span>
+              </button>
+            );
+          })}
           <p className="nav-verse">
-            “Thy word have I hid in mine heart…”
+            Scripture for a lifetime.
             <br />
-            <small>PSALM 119:11 · KJV</small>
+            <small>PRIVATE. LOCAL. YOURS.</small>
           </p>
         </nav>
         <main id="main" tabIndex={-1}>
@@ -255,7 +313,31 @@ function App() {
             <>
               {page === "Today" && <Today {...ctx} />}
               {page === "Bible" && <Bible {...ctx} />}
-              {page === "Projects" && <Projects {...ctx} />}
+              {["Memory", "Projects", "Practice", "Chapter Code"].includes(
+                page,
+              ) && (
+                <nav className="memory-tabs" aria-label="Memory tools">
+                  {(["Projects", "Practice", "Chapter Code"] as Page[]).map(
+                    (p) => (
+                      <button
+                        key={p}
+                        aria-current={
+                          page === p || (page === "Memory" && p === "Projects")
+                            ? "page"
+                            : undefined
+                        }
+                        onClick={() => ctx.go(p)}
+                      >
+                        {p}
+                      </button>
+                    ),
+                  )}
+                </nav>
+              )}
+              {(page === "Projects" || page === "Memory") && (
+                <Projects {...ctx} />
+              )}
+              {page === "Progress" && <Progress {...ctx} />}
               {page === "Practice" && (
                 <Practice key={refs.join(",")} {...ctx} />
               )}
@@ -340,22 +422,56 @@ function Today(c: Ctx) {
     : primary
       ? planProject(primary.data.refs, reviews, Date.now(), c.prefs.minutes)
       : c.refs;
+  const now = new Date();
+  const greeting =
+    now.getHours() < 12
+      ? "Good morning"
+      : now.getHours() < 18
+        ? "Good afternoon"
+        : "Good evening";
+  const currentRef = current?.[0] ?? c.refs[0];
+  const completion = primary
+    ? primary.data.refs.filter((r) =>
+        mastered.some((s) => s.id === "verse:" + r),
+      ).length
+    : 0;
   return (
     <>
       <Heading
-        eyebrow="A LITTLE EACH DAY. A LIFETIME IN THE WORD."
-        title="Abide in the Word."
+        eyebrow={now.toLocaleDateString(undefined, {
+          weekday: "long",
+          month: "long",
+          day: "numeric",
+        })}
+        title="Today's Scripture"
       >
-        <p>Begin with what you know. Make room for what takes root.</p>
+        <p>{greeting}. Make a little room for the Word.</p>
       </Heading>
       <section className="hero">
         <div className="row">
-          <span className="eyebrow">TODAY’S SCRIPTURE</span>
-          <span className="pill">KING JAMES VERSION</span>
+          <span className="eyebrow">
+            {primary ? "YOUR PRIMARY MEMORY PROJECT" : "A WORD TO KEEP"}
+          </span>
+          <span className="pill">KJV</span>
         </div>
-        <h2>{label(c.books, current?.[0] ?? c.refs[0])}</h2>
-        <blockquote>{textFor(c.books, current?.[0] ?? c.refs[0])}</blockquote>
-        <div className="row">
+        <h2>{primary?.data.name ?? label(c.books, currentRef)}</h2>
+        {primary && (
+          <p className="passage-reference">{label(c.books, currentRef)}</p>
+        )}
+        <blockquote>{textFor(c.books, currentRef)}</blockquote>
+        {primary && (
+          <>
+            <progress
+              aria-label="Primary project completion"
+              value={completion}
+              max={primary.data.refs.length}
+            />
+            <small>
+              {completion} of {primary.data.refs.length} verses taking root
+            </small>
+          </>
+        )}
+        <div className="row practice-action">
           <button
             className="primary"
             onClick={() => {
@@ -363,16 +479,85 @@ function Today(c: Ctx) {
               c.go("Practice");
             }}
           >
-            Continue Practice <span>→</span>
+            Continue Practice <ArrowRight size={18} aria-hidden="true" />
           </button>
           <span className="muted">
-            {due.length} reviews waiting · about{" "}
+            About{" "}
             {c.prefs.minutes +
-              (new Date().getDay() === 6 && c.prefs.saturday ? 10 : 0)}{" "}
+              (now.getDay() === 6 && c.prefs.saturday ? 10 : 0)}{" "}
             minutes
           </span>
         </div>
       </section>
+      <div className="daily-plan">
+        <div>
+          <span className="eyebrow">RETURN & REMEMBER</span>
+          <h2>
+            {due.length
+              ? `${due.length} reviews ready`
+              : "A gentle place to begin"}
+          </h2>
+          <p>
+            {due.length
+              ? "Begin with familiar words before learning something new."
+              : "Choose a passage, read slowly, and begin when you are ready."}
+          </p>
+        </div>
+        <div>
+          <span className="eyebrow">ROOM FOR SOMETHING NEW</span>
+          <h2>
+            {newAllowance(reviews, Date.now(), c.prefs.minutes)} verses
+            suggested
+          </h2>
+          <p>Missed days carry forward. There is no streak to protect.</p>
+          <button className="text-button" onClick={() => c.go("Memory")}>
+            Your memory projects <ArrowRight size={16} aria-hidden="true" />
+          </button>
+        </div>
+      </div>
+      <div className="quick-links" aria-label="Quick access">
+        {(
+          [
+            { name: "Open Scripture", target: "Bible", Icon: BookOpen },
+            { name: "Chapter Code", target: "Chapter Code", Icon: Brain },
+            { name: "Meditate", target: "Meditation", Icon: Leaf },
+            { name: "Listen", target: "Listen", Icon: Headphones },
+          ] as const
+        ).map(({ name, target, Icon }) => (
+          <button key={name} onClick={() => c.go(target)}>
+            <Icon size={20} strokeWidth={1.5} aria-hidden="true" />
+            <span>{name}</span>
+            <ArrowRight size={16} aria-hidden="true" />
+          </button>
+        ))}
+      </div>
+    </>
+  );
+}
+
+function Progress(c: Ctx) {
+  const reviews = c.records
+      .filter((e) => e.kind === "review")
+      .map((e) => e.data),
+    due = dueQueue(reviews, Date.now()),
+    projects = c.records.filter((e) => e.kind === "project"),
+    primary = projects.find((e) => e.data.primary),
+    attempts = c.records.filter((e) => e.kind === "attempt"),
+    mastered = reviews.filter((r) => r.stage >= 3 && r.id.startsWith("verse:")),
+    weak = [...reviews].sort((a, b) => a.accuracy - b.accuracy).slice(0, 5);
+  const unitFor = (key: string) =>
+    c.records.filter((e) => e.kind === "unit").find((e) => e.id === key)?.data
+      .refs;
+  const current = due.length
+    ? unitFor(due[0].id)
+    : primary
+      ? planProject(primary.data.refs, reviews, Date.now(), c.prefs.minutes)
+      : c.refs;
+  return (
+    <>
+      <Heading eyebrow="A LIFETIME IN THE WORD" title="Quiet, lasting growth">
+        <p>A picture of retention, not a measure of worth.</p>
+      </Heading>
       <div className="grid stats">
         <section>
           <strong>{mastered.length}</strong>
@@ -405,8 +590,8 @@ function Today(c: Ctx) {
       </div>
       <div className="grid two">
         <section>
-          <p className="eyebrow">YOUR MEMORY GARDEN</p>
-          <h2>Growing, at your pace</h2>
+          <p className="eyebrow">YOUR MEMORY PROJECTS</p>
+          <h2>At your pace</h2>
           {projects.length ? (
             projects.map((p) => {
               const done = p.data.refs.filter((r) =>
@@ -532,6 +717,7 @@ function Bible(c: Ctx) {
     [selected, setSelected] = useState<Ref[]>([]),
     [compare, setCompare] = useState(""),
     [focus, setFocus] = useState(false),
+    [readerSize, setReaderSize] = useState(24),
     [importName, setImportName] = useState("RVR1960"),
     [rights, setRights] = useState(false);
   useEffect(() => setResultPage(0), [query, book, chapter, status]);
@@ -567,8 +753,8 @@ function Bible(c: Ctx) {
         eyebrow="THE SCRIPTURE LIBRARY"
         title="Read. Receive. Remember."
       />
-      <section>
-        <div className="controls">
+      <section className={"bible-surface" + (focus ? " focused-reader" : "")}>
+        <div className="controls reader-toolbar">
           <label>
             Book
             <select
@@ -641,6 +827,16 @@ function Bible(c: Ctx) {
             </select>
           </label>
         </div>
+        <label className="reader-size">
+          Scripture text size
+          <input
+            type="range"
+            min="22"
+            max="38"
+            value={readerSize}
+            onChange={(e) => setReaderSize(+e.target.value)}
+          />
+        </label>
         <p className="muted">
           KJV is always your memorization target.{" "}
           {query
@@ -683,7 +879,14 @@ function Bible(c: Ctx) {
             </button>
           </div>
         )}
-        <div className={focus ? "reader quiet" : "reader"}>
+        <div
+          style={
+            {
+              "--scripture-size": `${readerSize / 16}rem`,
+            } as React.CSSProperties
+          }
+          className={focus ? "reader quiet" : "reader"}
+        >
           {results.slice(resultPage * 200, (resultPage + 1) * 200).map((r) => (
             <article key={r} className={translation ? "comparison" : ""}>
               <div>
@@ -1378,25 +1581,51 @@ function Practice(c: Ctx) {
         {result && (
           <div aria-live="polite">
             <h2>{Math.round(result.accuracy * 100)}% word accuracy</h2>
-            <p>
-              Visible study text and cues count as assistance. Hide Scripture or
-              choose Type from memory for an unassisted attempt. Capitalization
-              and punctuation are ignored. Verse order and transitions affect
-              passage grading. Separate verses with new lines for individual
-              grading.
-            </p>
+            <details>
+              <summary>How recall is graded</summary>
+              <p>
+                Visible study text and cues count as assistance. Hide Scripture
+                or choose Type from memory for an unassisted attempt.
+                Capitalization and punctuation are ignored. Verse order and
+                transitions affect passage grading. Separate verses with new
+                lines for individual grading.
+              </p>
+            </details>
             {result.errors.length ? (
               <ul>
                 {result.errors.slice(0, 40).map((e, i) => (
-                  <li key={i}>
+                  <li className="recall-error" key={i}>
                     {e.type}: {e.expected && <b>{e.expected}</b>}
                     {e.actual && <> → {e.actual}</>}
                   </li>
                 ))}
               </ul>
             ) : (
-              <p>Every word is in place.</p>
+              <p className="recall-success">
+                Every word is in place — correct recall.
+              </p>
             )}
+            <details className="word-feedback">
+              <summary>Word-by-word feedback</summary>
+              <p className="muted">
+                Unmarked words were recalled correctly. Errors are labelled by
+                type.
+              </p>
+              <p>
+                {result.alignment.map((word, i) => (
+                  <React.Fragment key={i}>
+                    {word.type === "correct" ? (
+                      <span className="recalled-word">{word.expected}</span>
+                    ) : (
+                      <span className="recall-error">
+                        [{word.type}: {word.expected}
+                        {word.actual ? " → " + word.actual : ""}]
+                      </span>
+                    )}{" "}
+                  </React.Fragment>
+                ))}
+              </p>
+            </details>
             <div className="controls">
               <label>
                 Self-assessment
@@ -1469,6 +1698,42 @@ function ChapterCode(c: Ctx) {
         Use a real or imagined journey. Let each association point back to the
         meaning of Scripture.
       </p>
+      {anchors.length > 0 && (
+        <section className="memory-atlas" aria-label="Chapter memory journey">
+          <p className="eyebrow">YOUR MEMORY ATLAS</p>
+          <ol>
+            {[...anchors]
+              .sort((a, b) => {
+                const x = a.data.ref.split(":").map(Number),
+                  y = b.data.ref.split(":").map(Number);
+                return x[0] - y[0] || x[1] - y[1] || x[2] - y[2];
+              })
+              .map((a) => (
+                <li key={a.id}>
+                  <span className="anchor-number" aria-hidden="true">
+                    {a.data.ref.split(":")[2]}
+                  </span>
+                  <div>
+                    <small>
+                      {a.data.section} · {label(c.books, a.data.ref)}
+                    </small>
+                    <h3>{a.data.location || a.data.keyword}</h3>
+                    <p>{textFor(c.books, a.data.ref)}</p>
+                    <button
+                      onClick={() => {
+                        setRef(a.data.ref);
+                        setForm(a.data);
+                        setExisting(a.id);
+                      }}
+                    >
+                      Visit this anchor
+                    </button>
+                  </div>
+                </li>
+              ))}
+          </ol>
+        </section>
+      )}
       <section>
         <label>
           Verse
@@ -1565,7 +1830,18 @@ function ChapterCode(c: Ctx) {
               >
                 Edit anchor
               </button>
-              <button onClick={() => void c.run(() => db.records.delete(a.id))}>
+              <button
+                onClick={() =>
+                  void c.run(async () => {
+                    if (
+                      window.confirm(
+                        "Remove this item from this device? This cannot be undone without a backup.",
+                      )
+                    )
+                      await db.records.delete(a.id);
+                  })
+                }
+              >
                 Remove anchor
               </button>
             </div>
@@ -1659,7 +1935,18 @@ function Meditation(c: Ctx) {
                 {new Date(e.data.at).toLocaleDateString()}
               </small>
               <p className="preserve">{e.data.text}</p>
-              <button onClick={() => void c.run(() => db.records.delete(e.id))}>
+              <button
+                onClick={() =>
+                  void c.run(async () => {
+                    if (
+                      window.confirm(
+                        "Remove this item from this device? This cannot be undone without a backup.",
+                      )
+                    )
+                      await db.records.delete(e.id);
+                  })
+                }
+              >
                 Delete reflection
               </button>
             </article>
@@ -1746,7 +2033,18 @@ function Meditation(c: Ctx) {
               >
                 Recall from references
               </button>
-              <button onClick={() => void c.run(() => db.records.delete(e.id))}>
+              <button
+                onClick={() =>
+                  void c.run(async () => {
+                    if (
+                      window.confirm(
+                        "Remove this item from this device? This cannot be undone without a backup.",
+                      )
+                    )
+                      await db.records.delete(e.id);
+                  })
+                }
+              >
                 Delete collection
               </button>
             </article>
@@ -1871,6 +2169,10 @@ function Listen(c: Ctx) {
   useEffect(() => {
     if (player.current) player.current.playbackRate = speed;
   }, [speed, url]);
+  useEffect(() => {
+    document.body.classList.toggle("has-audio", !!current);
+    return () => document.body.classList.remove("has-audio");
+  }, [!!current]);
   const next = () => {
     if (repeat === "track") {
       void player.current?.play();
@@ -1962,56 +2264,96 @@ function Listen(c: Ctx) {
               {a.data.name}
             </button>
             <small>{a.data.rights}</small>
-            <button onClick={() => void c.run(() => db.records.delete(a.id))}>
+            <button
+              onClick={() =>
+                void c.run(async () => {
+                  if (
+                    window.confirm(
+                      "Remove this item from this device? This cannot be undone without a backup.",
+                    )
+                  )
+                    await db.records.delete(a.id);
+                })
+              }
+            >
               Remove recording
             </button>
           </div>
         ))}
         {!filtered.length && <p>No recordings in this scope.</p>}
-        {current && (
-          <>
-            <h3>{current.data.name}</h3>
-            <audio
-              ref={player}
-              key={url}
-              src={url}
-              controls
-              loop={repeat === "track"}
-              autoPlay
-              onEnded={next}
-              aria-label="Scripture audio player"
-            />
-            <div className="controls">
-              <label>
-                Speed
-                <select
-                  aria-label="Speed"
-                  value={speed}
-                  onChange={(e) => setSpeed(+e.target.value)}
+        {current &&
+          createPortal(
+            <aside
+              className="persistent-player"
+              aria-label="Current Scripture recording"
+            >
+              <div className="player-title">
+                <h3>{current.data.name}</h3>
+                <small>
+                  {label(c.books, current.data.refs[0])} · Available offline
+                </small>
+              </div>
+              <audio
+                ref={player}
+                key={url}
+                src={url}
+                controls
+                loop={repeat === "track"}
+                autoPlay
+                onEnded={next}
+                aria-label="Scripture audio player"
+              />
+              <div className="controls">
+                <label>
+                  Speed
+                  <select
+                    aria-label="Speed"
+                    value={speed}
+                    onChange={(e) => setSpeed(+e.target.value)}
+                  >
+                    {[0.5, 0.75, 1, 1.25, 1.5, 2].map((s) => (
+                      <option key={s} value={s}>
+                        {s}×
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  Repeat
+                  <select
+                    aria-label="Repeat"
+                    value={repeat}
+                    onChange={(e) => setRepeat(e.target.value)}
+                  >
+                    <option value="none">Off</option>
+                    <option value="track">Recording</option>
+                    <option value="playlist">Playlist</option>
+                  </select>
+                </label>
+                <button
+                  aria-label="Previous recording"
+                  onClick={() => {
+                    const i = filtered.findIndex((a) => a.id === active);
+                    if (i > 0) setActive(filtered[i - 1].id);
+                  }}
                 >
-                  {[0.5, 0.75, 1, 1.25, 1.5, 2].map((s) => (
-                    <option key={s} value={s}>
-                      {s}×
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label>
-                Repeat
-                <select
-                  aria-label="Repeat"
-                  value={repeat}
-                  onChange={(e) => setRepeat(e.target.value)}
+                  <ChevronLeft aria-hidden="true" size={18} />
+                </button>
+                <button
+                  aria-label="Next recording"
+                  onClick={() => {
+                    const i = filtered.findIndex((a) => a.id === active);
+                    if (i + 1 < filtered.length) setActive(filtered[i + 1].id);
+                    else if (repeat === "playlist" && filtered.length)
+                      setActive(filtered[0].id);
+                  }}
                 >
-                  <option value="none">Off</option>
-                  <option value="track">Recording</option>
-                  <option value="playlist">Playlist</option>
-                </select>
-              </label>
-              <button onClick={next}>Next recording</button>
-            </div>
-          </>
-        )}
+                  <ChevronRight aria-hidden="true" size={18} />
+                </button>
+              </div>
+            </aside>,
+            document.body,
+          )}
         <p className="muted">
           For automatic chapter/book playback, import the corresponding
           recordings. Background playback depends on the browser and device;

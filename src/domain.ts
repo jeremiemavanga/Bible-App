@@ -174,23 +174,40 @@ export function grade(expected: string, actual: string) {
         d[i - 1][j - 1] + Number(a[i - 1] !== b[j - 1]),
       );
   const errors: { type: string; expected: string; actual: string }[] = [];
+  const middle: { type: string; expected: string; actual: string }[] = [];
   let i = a.length,
     j = b.length;
   while (i || j) {
     if (i && j && a[i - 1] === b[j - 1]) {
+      middle.push({ type: "correct", expected: a[i - 1], actual: b[j - 1] });
       i--;
       j--;
     } else if (i && j && d[i][j] === d[i - 1][j - 1] + 1) {
-      errors.push({ type: "substitution", expected: a[--i], actual: b[--j] });
+      const error = { type: "substitution", expected: a[--i], actual: b[--j] };
+      errors.push(error);
+      middle.push(error);
     } else if (i && d[i][j] === d[i - 1][j] + 1) {
-      errors.push({ type: "omission", expected: a[--i], actual: "" });
+      const error = { type: "omission", expected: a[--i], actual: "" };
+      errors.push(error);
+      middle.push(error);
     } else {
-      errors.push({ type: "insertion", expected: "", actual: b[--j] });
+      const error = { type: "insertion", expected: "", actual: b[--j] };
+      errors.push(error);
+      middle.push(error);
     }
   }
   return {
     accuracy: Math.max(0, 1 - d[a.length][b.length] / denominator),
     errors: errors.reverse(),
+    alignment: [
+      ...fullA
+        .slice(0, start)
+        .map((word) => ({ type: "correct", expected: word, actual: word })),
+      ...middle.reverse(),
+      ...fullA
+        .slice(endA)
+        .map((word) => ({ type: "correct", expected: word, actual: word })),
+    ],
   };
 }
 const day = 86400000;

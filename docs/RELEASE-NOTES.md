@@ -2,7 +2,15 @@
 
 Validated in the cloud workspace on October 29, 2026. The app is implemented and the local development/production workflows run. This is **not** a claim of physical Apple-device certification, a deployed website, or cleared distribution of third-party translations.
 
-## Passed
+## Latest visual-design revision
+
+Applied the supplied `VISUAL-SPECIFICATION.md`: exact forest/ivory/sage tokens, five primary destinations, iPhone bottom navigation, adaptive iPad sidebar, a Scripture-led Today screen, separate Progress dashboard, locally bundled Lucide icons, system serif/sans fonts, 44px controls, reader sizing, sequential memory atlas, persistent visible audio controls, labelled word-by-word recall feedback, and explicit native confirmation for item removal. All original data identifiers and local-storage schemas are preserved.
+
+Validation for this revision: **19 unit tests and 21 browser scenarios passed** across desktop, iPhone-size and iPad-size Chromium. Accessibility checks cover WCAG 2.2 rule tags, keyboard access and 160% text scaling across all destinations/tools. Browser tests also verify the exact five destinations, sage primary action, statistics removed from Today, reader sizing, quiet mode, and continuing visible audio after navigation. Production dependencies still report zero audit vulnerabilities. WebKit and physical Apple-device verification remain outstanding as described below.
+
+A manual GitHub Pages workflow is included. The `/Bible-App/` production build has been checked locally for loading, service-worker provisioning, offline reload and KJV reference search. It has **not** been published to a public website by these local tests. Follow `GITHUB-PAGES.md` to select the GitHub Actions Pages source and run the deployment workflow.
+
+## Original functional baseline checks
 
 - Frozen `npm ci` installation replay, source-corpus SHA-256 verification and production TypeScript/Vite/PWA build. The precache contains the complete KJV corpus and app shell. Production dependencies: `npm audit --omit=dev` reported zero vulnerabilities.
 - **18 Vitest checks**: all 66 books / 1,189 chapters / 31,102 verses, references/ranges, word-error normalization and order, fixed-clock six-stage lifelong scheduling, hint regressions, missed days, adaptive introductions, authenticated backups, fresh salt/nonce, wrong passwords, corruption, schema rejection, clean IndexedDB restoration and duplicate prevention.

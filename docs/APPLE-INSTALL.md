@@ -1,5 +1,7 @@
 # Apple installation and physical-device acceptance
 
+For this repository’s GitHub Pages site, first follow [GITHUB-PAGES.md](GITHUB-PAGES.md). Its workflow builds with `npm run build -- --base=/Bible-App/`; use the deployment-provided address with a trailing slash. The origin-root instructions below apply to other static hosts.
+
 1. Build with `npm ci --cache /tmp/word-within-npm` and `npm run build`.
 2. Serve only `dist/` at the root of a trusted HTTPS static site, with normal JavaScript, JSON and web-manifest MIME types. Never upload user backups, notes or IndexedDB exports as site assets. `npm run preview` is a local test server, not production hosting.
 3. Open the HTTPS address in Safari. Wait for **Offline ready**. First provisioning includes the entire 66-book KJV corpus (approximately 4 MB). Imported personal media add storage separately.
