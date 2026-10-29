@@ -404,6 +404,78 @@ function Passage({
     </div>
   );
 }
+function MonthCalendar({ records, now }: { records: Entry[]; now: Date }) {
+  const year = now.getFullYear(),
+    month = now.getMonth(),
+    first = new Date(year, month, 1),
+    offset = (first.getDay() + 6) % 7;
+  const count = new Date(year, month + 1, 0).getDate();
+  const cells = Math.ceil((offset + count) / 7) * 7;
+  const practiced = new Map<string, number>();
+  for (const e of records)
+    if (e.kind === "attempt") {
+      const key = new Date(e.data.at).toDateString();
+      practiced.set(key, (practiced.get(key) ?? 0) + 1);
+    }
+  return (
+    <div
+      className="month-calendar"
+      role="group"
+      aria-label={`Practice calendar for ${now.toLocaleDateString(undefined, { month: "long", year: "numeric" })}`}
+    >
+      <div className="weekdays" aria-hidden="true">
+        {["M", "T", "W", "T", "F", "S", "S"].map((d, i) => (
+          <span key={i}>{d}</span>
+        ))}
+      </div>
+      <div className="month-dots">
+        {Array.from({ length: cells }, (_, i) => {
+          const date = new Date(year, month, i - offset + 1),
+            outside = date.getMonth() !== month,
+            today = date.toDateString() === now.toDateString(),
+            reviews = practiced.get(date.toDateString()) ?? 0;
+          return (
+            <span
+              key={i}
+              role="img"
+              className={
+                "month-dot" +
+                (outside ? " outside" : "") +
+                (reviews ? " practiced" : "") +
+                (today ? " today" : "")
+              }
+              title={`${date.toLocaleDateString()}: ${reviews} reviews${today ? " · Today" : ""}`}
+              aria-label={`${date.toLocaleDateString()}: ${reviews} reviews${today ? " · Today" : ""}`}
+            >
+              <span className="day-numeral" aria-hidden="true">
+                {date.getDate()}
+              </span>
+            </span>
+          );
+        })}
+      </div>
+      <p className="calendar-key">
+        <span>
+          <i className="key-practiced" aria-hidden="true" />
+          Practiced
+        </span>
+        <span>
+          <i className="key-today" aria-hidden="true" />
+          Today
+        </span>
+        <span>No streaks. Just return.</span>
+      </p>
+    </div>
+  );
+}
+function useLocalDay() {
+  const [day, setDay] = useState(() => new Date());
+  useEffect(() => {
+    const timer = setInterval(() => setDay(new Date()), 60000);
+    return () => clearInterval(timer);
+  }, []);
+  return day;
+}
 function Today(c: Ctx) {
   const reviews = c.records
       .filter((e) => e.kind === "review")
@@ -422,7 +494,7 @@ function Today(c: Ctx) {
     : primary
       ? planProject(primary.data.refs, reviews, Date.now(), c.prefs.minutes)
       : c.refs;
-  const now = new Date();
+  const now = useLocalDay();
   const greeting =
     now.getHours() < 12
       ? "Good morning"
@@ -437,58 +509,78 @@ function Today(c: Ctx) {
     : 0;
   return (
     <>
-      <Heading
-        eyebrow={now.toLocaleDateString(undefined, {
-          weekday: "long",
-          month: "long",
-          day: "numeric",
-        })}
-        title="Today's Scripture"
-      >
-        <p>{greeting}. Make a little room for the Word.</p>
-      </Heading>
-      <section className="hero">
-        <div className="row">
-          <span className="eyebrow">
-            {primary ? "YOUR PRIMARY MEMORY PROJECT" : "A WORD TO KEEP"}
-          </span>
-          <span className="pill">KJV</span>
-        </div>
-        <h2>{primary?.data.name ?? label(c.books, currentRef)}</h2>
-        {primary && (
-          <p className="passage-reference">{label(c.books, currentRef)}</p>
-        )}
-        <blockquote>{textFor(c.books, currentRef)}</blockquote>
-        {primary && (
-          <>
-            <progress
-              aria-label="Primary project completion"
-              value={completion}
-              max={primary.data.refs.length}
-            />
-            <small>
-              {completion} of {primary.data.refs.length} verses taking root
-            </small>
-          </>
-        )}
-        <div className="row practice-action">
-          <button
-            className="primary"
-            onClick={() => {
-              c.select(current?.length ? current : c.refs);
-              c.go("Practice");
-            }}
+      <div className="today-layout">
+        <div className="date-panel">
+          <time
+            className="date-poster"
+            dateTime={`${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`}
           >
-            Continue Practice <ArrowRight size={18} aria-hidden="true" />
-          </button>
-          <span className="muted">
-            About{" "}
-            {c.prefs.minutes +
-              (now.getDay() === 6 && c.prefs.saturday ? 10 : 0)}{" "}
-            minutes
-          </span>
+            <span className="sr-only">
+              {now.toLocaleDateString(undefined, { dateStyle: "full" })}
+            </span>
+            <span className="poster-day" aria-hidden="true">
+              {now.getDate()}
+            </span>
+            <span className="poster-month" aria-hidden="true">
+              {now.toLocaleDateString(undefined, { month: "long" })}
+            </span>
+            <span className="poster-weekday" aria-hidden="true">
+              {now.toLocaleDateString(undefined, { weekday: "short" })}
+            </span>
+            <span className="poster-year" aria-hidden="true">
+              {now.getFullYear()}
+            </span>
+          </time>
+          <MonthCalendar records={c.records} now={now} />
         </div>
-      </section>
+        <div className="today-reading">
+          <Heading eyebrow="THE WORD WITHIN" title="Today's Scripture">
+            <p>{greeting}. A moment in the Word.</p>
+          </Heading>
+          <section className="hero">
+            <div className="row">
+              <span className="eyebrow">
+                {primary ? "YOUR PRIMARY MEMORY PROJECT" : "A WORD TO KEEP"}
+              </span>
+              <span className="pill">KJV</span>
+            </div>
+            <h2>{primary?.data.name ?? label(c.books, currentRef)}</h2>
+            {primary && (
+              <p className="passage-reference">{label(c.books, currentRef)}</p>
+            )}
+            <blockquote>{textFor(c.books, currentRef)}</blockquote>
+            {primary && (
+              <>
+                <progress
+                  aria-label="Primary project completion"
+                  value={completion}
+                  max={primary.data.refs.length}
+                />
+                <small>
+                  {completion} of {primary.data.refs.length} verses taking root
+                </small>
+              </>
+            )}
+            <div className="row practice-action">
+              <button
+                className="primary"
+                onClick={() => {
+                  c.select(current?.length ? current : c.refs);
+                  c.go("Practice");
+                }}
+              >
+                Continue Practice <ArrowRight size={18} aria-hidden="true" />
+              </button>
+              <span className="muted">
+                About{" "}
+                {c.prefs.minutes +
+                  (now.getDay() === 6 && c.prefs.saturday ? 10 : 0)}{" "}
+                minutes
+              </span>
+            </div>
+          </section>
+        </div>
+      </div>
       <div className="daily-plan">
         <div>
           <span className="eyebrow">RETURN & REMEMBER</span>
@@ -684,25 +776,7 @@ function Progress(c: Ctx) {
             );
           })}
         <h2>Your practice calendar</h2>
-        <div className="calendar" aria-label="Practice over the last 28 days">
-          {Array.from({ length: 28 }, (_, i) => {
-            const d = new Date();
-            d.setDate(d.getDate() - 27 + i);
-            const count = attempts.filter(
-              (a) => new Date(a.data.at).toDateString() === d.toDateString(),
-            ).length;
-            return (
-              <span
-                className={count ? "practiced" : ""}
-                key={i}
-                title={`${d.toLocaleDateString()}: ${count} reviews`}
-                aria-label={`${d.toLocaleDateString()}: ${count} reviews`}
-              >
-                {d.getDate()}
-              </span>
-            );
-          })}
-        </div>
+        <MonthCalendar records={c.records} now={new Date()} />
         <small>Every return matters. No streaks to protect.</small>
       </section>
     </>

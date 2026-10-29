@@ -1,6 +1,6 @@
 # The Word Within
 
-A private, offline-first Scripture memorization PWA built against the approved eight-stage specification. React + TypeScript + Vite, Dexie/IndexedDB, a precaching service worker, Web Crypto encrypted exports, and Vitest/Playwright checks. No accounts or automatic sync. The interface follows the [approved visual design system](docs/VISUAL-SPECIFICATION.md).
+A private, offline-first Scripture memorization PWA built against the approved eight-stage specification. React + TypeScript + Vite, Dexie/IndexedDB, a precaching service worker, Web Crypto encrypted exports, and Vitest/Playwright checks. No accounts or automatic sync. The interface follows the [latest paper-and-ink visual reference](docs/PAPER-VISUAL-DIRECTION.md), superseding the earlier dark palette.
 
 ## Develop and verify
 

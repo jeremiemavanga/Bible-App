@@ -2,7 +2,11 @@
 
 Validated in the cloud workspace on October 29, 2026. The app is implemented and the local development/production workflows run. This is **not** a claim of physical Apple-device certification, a deployed website, or cleared distribution of third-party translations.
 
-## Latest visual-design revision
+## Current paper-and-ink revision
+
+The October 30 image reference supersedes the earlier forest/sage palette. Added a warm paper-and-ink system, oversized live local date, orange-today circular full-month calendar, and matching typography, controls and installation icons. Only actual review attempts mark practiced days. Five destinations, local records and all functional workflows are preserved. Calendar accessibility uses semantic labels instead of color-only status. Validation: 19 unit checks and 24 browser checks passed across desktop, phone and tablet Chromium layouts, including leap-year month layout and real-history-only markers. Accessibility and 160% text checks pass across all screens; physical Apple/Safari validation is still outstanding. The production build passes. See `PAPER-VISUAL-DIRECTION.md`.
+
+## Previous visual-design revision
 
 Applied the supplied `VISUAL-SPECIFICATION.md`: exact forest/ivory/sage tokens, five primary destinations, iPhone bottom navigation, adaptive iPad sidebar, a Scripture-led Today screen, separate Progress dashboard, locally bundled Lucide icons, system serif/sans fonts, 44px controls, reader sizing, sequential memory atlas, persistent visible audio controls, labelled word-by-word recall feedback, and explicit native confirmation for item removal. All original data identifiers and local-storage schemas are preserved.
 
