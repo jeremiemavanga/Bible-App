@@ -1,5 +1,6 @@
 import { test, expect } from "@playwright/test";
-import { navigate } from "./navigation";
+import { navigate, fullPassagePractice } from "./navigation";
+import { learnPassage } from "./guided";
 import { readFileSync } from "node:fs";
 const books = JSON.parse(readFileSync("public/data/kjv.json", "utf8"));
 const psalm = books[18].chapters[116];
@@ -10,7 +11,7 @@ async function chapter117(page: import("@playwright/test").Page) {
   await page
     .getByRole("button", { name: "Select chapter", exact: true })
     .click();
-  await page.getByRole("button", { name: "Practice 2 selected" }).click();
+  await fullPassagePractice(page);
   await page.getByLabel("Memorization method").selectOption("Type from memory");
 }
 
@@ -46,10 +47,14 @@ test("recall controls truly hide Scripture and saved recall survives offline rel
   await context.setOffline(true);
   await page.reload();
   await expect(
-    page.getByText("Resume saved recall", { exact: true }),
+    page.getByText("Saved typed recall", { exact: true }),
   ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Start practice", exact: true }),
+  ).toBeVisible();
+  await page.locator(".saved-recall-options > summary").click();
   await page
-    .getByRole("button", { name: "Continue Practice", exact: false })
+    .getByRole("button", { name: "Continue saved typed recall", exact: true })
     .click();
   await expect(page.getByLabel("Type or transcribe your recall")).toHaveValue(
     "My unfinished recall",
@@ -88,7 +93,7 @@ test("paragraph recitation stores correct independent verse scores", async ({
     scores.filter((r) => r.kind === "review").map((r) => r.data.accuracy),
   ).toEqual([1, 1, 1]);
 });
-test("daily session advances through new verses and ends with durable reviews", async ({
+test("daily session automatically teaches sequential verses and saves durable reviews", async ({
   page,
 }) => {
   await page.goto("/");
@@ -96,30 +101,16 @@ test("daily session advances through new verses and ends with durable reviews", 
   await page.getByLabel("Name", { exact: true }).fill("A quiet daily practice");
   await page.getByLabel("References (separate passages").fill("Psalms 117");
   await page.getByRole("button", { name: "Plant this project" }).click();
-  await expect(
-    page.getByRole("heading", { name: "A quiet daily practice" }),
-  ).toBeVisible();
   await navigate(page, "Today");
   await page
-    .getByRole("button", { name: "Continue Practice", exact: false })
+    .getByRole("button", { name: "Start practice", exact: true })
     .click();
   for (let i = 0; i < 2; i++) {
     await expect(
-      page.getByText(`DAILY PRACTICE · ${i + 1} OF 2`, { exact: true }),
+      page.getByText(`${i + 1} of 2 passages`, { exact: true }),
     ).toBeVisible();
-    await page
-      .getByLabel("Memorization method")
-      .selectOption("Type from memory");
-    await page.getByLabel("Type or transcribe your recall").fill(psalm[i]);
-    await page
-      .getByRole("button", { name: "Compare recall", exact: true })
-      .click();
-    await page
-      .getByRole("button", { name: "Save review & schedule next", exact: true })
-      .click();
-    await expect(
-      page.getByRole("button", { name: "Review recorded" }),
-    ).toBeDisabled();
+    await expect(page.getByLabel("Memorization method")).toHaveCount(0);
+    await learnPassage(page, psalm[i]);
     await page
       .getByRole("button", {
         name: i === 0 ? "Next passage" : "Finish session",
@@ -128,11 +119,19 @@ test("daily session advances through new verses and ends with durable reviews", 
       .click();
   }
   await expect(
-    page.getByRole("heading", { name: "Enough for today." }),
+    page.getByRole("heading", { name: "All set for now.", exact: true }),
   ).toBeVisible();
+  const attempts = (await records(page)).filter(
+    (row) => row.kind === "attempt",
+  );
+  expect(attempts).toHaveLength(2);
   expect(
-    (await records(page)).filter((r) => r.kind === "attempt"),
-  ).toHaveLength(2);
+    attempts.every(
+      (row) =>
+        row.data.evidence === "initials" &&
+        row.data.exercise === "guided-learning",
+    ),
+  ).toBe(true);
 });
 test("reader crosses book boundaries, restores position and text size, and turns selected references into projects", async ({
   page,

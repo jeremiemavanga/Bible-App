@@ -1,4 +1,5 @@
-import { navigate } from "./navigation";
+import { navigate, fullPassagePractice } from "./navigation";
+import { chooseFullWording } from "./guided";
 import { test, expect } from "@playwright/test";
 test("offline Scripture, practice, anchors, reflection, and clean-context encrypted restore", async ({
   page,
@@ -39,24 +40,20 @@ test("offline Scripture, practice, anchors, reflection, and clean-context encryp
     page.getByRole("heading", { name: "Today's Scripture" }),
   ).toBeVisible();
   await page
-    .getByRole("button", { name: "Continue Practice", exact: false })
+    .getByRole("button", { name: /Start practice|Continue practice/i })
     .click();
-  await page.getByLabel("Memorization method").selectOption("Type from memory");
+  await chooseFullWording(page);
   await page
-    .getByLabel("Type or transcribe your recall")
+    .getByLabel("Your recall", { exact: true })
     .fill(
       "Thy word have I hid in mine heart, that I might not sin against thee.",
     );
-  await page.getByRole("button", { name: "Compare recall" }).click();
+  await page.getByRole("button", { name: "Check & save", exact: true }).click();
   await expect(
-    page.getByRole("heading", { name: "100% word accuracy" }),
+    page.getByText("100% word accuracy. Your review is saved.", {
+      exact: true,
+    }),
   ).toBeVisible();
-  await page
-    .getByRole("button", { name: "Save review & schedule next" })
-    .click();
-  await expect(
-    page.getByRole("button", { name: "Review recorded" }),
-  ).toBeDisabled();
   await navigate(page, "Chapter Code");
   await page.getByLabel("Location anchor").fill("My doorway");
   await page.getByLabel("Keyword or word cue").fill("hid");
@@ -204,7 +201,7 @@ test("whole chapter recitation persists independent verse/chapter reviews, trans
   await page
     .getByRole("button", { name: "Select chapter", exact: true })
     .click();
-  await page.getByRole("button", { name: "Practice 2 selected" }).click();
+  await fullPassagePractice(page);
   await page.getByLabel("Memorization method").selectOption("Type from memory");
   await page
     .getByRole("button", { name: "Progressive hint", exact: false })
@@ -338,10 +335,7 @@ test("authorized comparison packages never change the KJV memory target", async 
   await page
     .getByRole("button", { name: "Select chapter", exact: true })
     .click();
-  await page
-    .getByRole("region", { name: "Selected passage actions" })
-    .getByRole("button", { name: /^Practice/ })
-    .click();
+  await fullPassagePractice(page);
   await page.getByLabel("Memorization method").selectOption("Type from memory");
   await page
     .getByRole("button", { name: "Progressive hint", exact: false })

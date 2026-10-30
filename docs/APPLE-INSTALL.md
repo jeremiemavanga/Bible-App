@@ -11,6 +11,7 @@ For this repository’s GitHub Pages site, first follow [GITHUB-PAGES.md](GITHUB
 
 ## Required checks on each physical device (not completed in Linux)
 
+- Tap Start practice and complete a first-letter lesson. Confirm the keyboard opens from the learning action, remains focused between cue levels, allows corrections and does not hide the current word or input. Reopen offline and verify the saved cue level and remaining queue.
 - Open all 66 book selectors, search and read passages after Airplane Mode/network disconnection; close and reopen the installed app offline.
 - Use all six practice methods, type an intentional omission, verify grading, save reviews and reopen to verify persistence.
 - Check the default continuous reader and verse selection, surrounding-chapter context, the five-minute first session, spoken self-assessment without microphone permission, and the optional reflection/prayer finish. Verify keyboard and VoiceOver focus when a session ends.

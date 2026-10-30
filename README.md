@@ -4,6 +4,8 @@ A private, offline-first Scripture memorization PWA built against the approved e
 
 ## Latest improvements
 
+[Automatic first-letter practice](docs/AUTOMATIC-PRACTICE.md) is now the default: one tap chooses the passage and exercise, words appear as you type their initials, cues decrease automatically, and results save without a grading form. Learning steps and the remaining queue resume offline. Full-word checking and all six manual methods remain optional.
+
 Read [the Scripture experience update](docs/SCRIPTURE-EXPERIENCE.md): a calmer continuous reader, surrounding-chapter context, shorter first sessions, optional reflection and prayer, private spoken self-assessment, and retention stages that require successful recall across days and weeks. Existing review histories are preserved and old stage summaries are rebuilt from that evidence.
 
 Read [the learning and reading update](docs/LEARNING-UPDATE.md): guided daily sessions, accurate paragraph/whole-chapter grading, local draft recovery, chapter navigation and saved reading size, reference aliases, project creation from the reader, and portable media storage addressing the reported WebKit failure. New encrypted exports include drafts; version 1 backups remain importable.
@@ -39,7 +41,7 @@ Follow [the step-by-step GitHub Pages guide](docs/GITHUB-PAGES.md). A manual dep
 
 ## Workflows
 
-- **Today:** an editorial Scripture focus, current project, Continue Practice, due reviews and quiet quick access.
+- **Today:** an editorial Scripture focus, current project, Start practice, due reviews and quiet quick access.
 - **Progress:** long-term retention, accuracy, chapter/book completion, weak passages and a non-punitive practice calendar.
 - **Memory:** Projects, Practice and Chapter Code share one primary destination and a labelled tools bar.
 - **Bible:** all 66 KJV books, references/ranges, phrase and topic search, memorization-status filters, noncontiguous selection, quiet reading and local licensed comparison packages.

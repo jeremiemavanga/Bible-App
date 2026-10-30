@@ -2286,3 +2286,238 @@ button svg.lucide {
     margin-bottom: 8px;
   }
 }
+/* Automatic first-letter practice keeps the familiar paper, ink and orange. */
+.guided-practice,
+.guided-complete {
+  max-width: 680px;
+  margin: 8px auto 32px;
+  padding: 0 0 32px;
+  border-bottom: 0;
+}
+.guided-topline {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  margin-bottom: 28px;
+}
+.guided-practice h1,
+.guided-complete h1 {
+  font-size: clamp(1.75rem, 4vw, 2.5rem);
+  margin: 8px 0 20px;
+  outline: none;
+}
+.guided-practice > .eyebrow {
+  margin-bottom: 8px;
+}
+.guided-steps {
+  display: flex;
+  list-style: none;
+  padding: 0;
+  margin: 0 0 28px;
+  gap: 28px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text-secondary);
+  font-size: 0.8125rem;
+}
+.guided-steps li {
+  padding: 8px 0 12px;
+  border-bottom: 2px solid transparent;
+}
+.guided-steps li[aria-current="step"] {
+  border-bottom-color: var(--accent-gold);
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.guided-instruction {
+  font-size: 0.9375rem;
+  line-height: 1.7;
+  color: var(--text-secondary);
+  margin: 0 0 24px;
+}
+.guided-passage {
+  font-size: clamp(1.5rem, 3vw, 1.875rem);
+  line-height: 1.8;
+  letter-spacing: -0.025em;
+  margin: 16px 0 28px;
+}
+.guided-words {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 10px;
+  margin: 24px 0 28px;
+  font-size: 1.5rem;
+  line-height: 1.6;
+}
+.guided-word {
+  border-bottom: 2px solid transparent;
+  padding: 2px 0;
+  color: var(--text-secondary);
+  min-width: 1.6em;
+}
+.guided-word.entered {
+  color: var(--text-primary);
+}
+.guided-word.current {
+  color: var(--text-primary);
+  border-bottom-color: var(--accent-gold);
+}
+.initials-label {
+  margin-top: 16px;
+  font-size: 0.8125rem;
+}
+.initials-input {
+  font-size: 1.125rem;
+  letter-spacing: 0.1em;
+  min-height: 52px;
+  padding: 12px 14px;
+}
+.guided-typing-status {
+  min-height: 28px;
+  margin: 8px 0 16px;
+  font-size: 0.8125rem;
+  color: var(--text-secondary);
+}
+.guided-primary {
+  min-height: 48px;
+  padding-inline: 24px;
+  margin: 8px 12px 8px 0;
+}
+.guided-hint {
+  font-size: 0.8125rem;
+  border: 0;
+  text-decoration: underline;
+  text-underline-offset: 4px;
+  padding-left: 0;
+}
+.guided-options {
+  border: 0;
+  margin: 20px 0 0;
+  padding: 0;
+}
+.guided-options > summary {
+  font-size: 0.8125rem;
+  color: var(--text-secondary);
+}
+.guided-options > button {
+  display: flex;
+  margin-top: 8px;
+}
+.guided-draft-status {
+  min-height: 20px;
+  font-size: 0.6875rem;
+  color: var(--text-secondary);
+}
+.guided-feedback > p {
+  font-size: 1rem;
+}
+.guided-feedback .muted {
+  font-size: 0.8125rem;
+}
+.session-options,
+.first-passage-options,
+.today-plan {
+  padding: 0;
+  margin: 12px 0;
+  border: 0;
+}
+.session-options > summary,
+.first-passage-options > summary,
+.today-plan > summary {
+  font-size: 0.8125rem;
+  color: var(--text-secondary);
+}
+.hero .session-length {
+  margin: 8px 0 16px;
+}
+.ready-to-practise {
+  font-size: 1.25rem;
+  line-height: 1.7;
+  margin: 24px 0;
+}
+.first-passage-options .first-session {
+  margin-top: 0;
+}
+.today-plan .daily-plan {
+  margin-top: 16px;
+}
+.project-create {
+  padding: 0;
+  border: 0;
+}
+.project-create > summary {
+  border-block: 1px solid var(--border);
+  padding: 14px 4px;
+}
+.project-create > section {
+  padding-top: 24px;
+}
+.manual-memory-tools {
+  margin: 0 0 20px;
+  border: 0;
+  padding: 0;
+}
+.manual-memory-tools > summary {
+  font-size: 0.8125rem;
+  color: var(--text-secondary);
+}
+.memory-start {
+  margin: 16px 0 28px;
+}
+.memory-start p {
+  font-size: 0.8125rem;
+  color: var(--text-secondary);
+}
+.selection-extra {
+  padding: 0;
+  margin: 0;
+  border: 0;
+}
+.selection-extra > summary {
+  font-size: 0.75rem;
+  padding: 10px 4px;
+}
+@media (max-width: 700px) {
+  .guided-topline {
+    margin-bottom: 20px;
+  }
+  .guided-words {
+    font-size: 1.375rem;
+    gap: 6px 8px;
+  }
+  .guided-steps {
+    margin-bottom: 24px;
+  }
+  .guided-primary {
+    width: 100%;
+  }
+  .guided-practice > h1 {
+    font-size: 1.75rem;
+  }
+}
+@media (max-width: 700px) {
+  .guided-topline {
+    margin-bottom: 14px;
+  }
+  .guided-practice > h1 {
+    margin-bottom: 14px;
+  }
+  .guided-steps {
+    margin-bottom: 16px;
+  }
+  .guided-instruction {
+    font-size: 0.875rem;
+    line-height: 1.6;
+    margin-bottom: 16px;
+  }
+  .guided-words {
+    font-size: 1.25rem;
+    line-height: 1.6;
+    gap: 6px 8px;
+    margin: 16px 0 20px;
+  }
+  .initials-label {
+    margin-top: 12px;
+  }
+}

@@ -61,12 +61,13 @@ import {
 } from "./domain";
 import {
   gradePassage,
-  dailyQueue,
   newMaterialAllowance,
   adjacentChapter,
   type PracticeItem,
 } from "./learning";
 import { useLocalDraft } from "./drafts";
+import { GuidedPractice } from "./guided-practice";
+import { automaticQueue, passageId, reviewFor } from "./automatic";
 import { validTranslation } from "./validation";
 import "./style.css";
 const updateSW = registerSW({
@@ -82,6 +83,7 @@ const defaults: NotificationPreference = {
   saturday: true,
 };
 type Page =
+  | "Guided"
   | "Memory"
   | "Progress"
   | "Today"
@@ -230,23 +232,41 @@ function App() {
       const minutes =
         requestedMinutes ??
         prefs.minutes + (new Date().getDay() === 6 && prefs.saturday ? 10 : 0);
-      const items = dailyQueue(
-        records,
-        Date.now(),
-        minutes,
-        source,
-        !!projectRefs,
-      );
-      if (!items.length) {
-        setNotice(
-          "You are up to date. Read, meditate, or choose a passage to practice anytime.",
-        );
-        return;
-      }
-      setSession({ items, position: 0, minutes });
-      setRefs(items[0].refs);
-      setRecallOnly(items[0].reason === "review");
-      setPage("Practice");
+      const saved = records
+        .filter((e) => e.kind === "draft")
+        .filter(
+          (e) =>
+            e.data.guided &&
+            (!projectRefs || e.data.refs.every((ref) => source.includes(ref))),
+        )
+        .sort((a, b) => b.data.updated - a.data.updated)[0];
+      const items = saved?.data.guided
+        ? [
+            saved.data.refs,
+            ...saved.data.guided.remaining.filter(
+              (group) =>
+                !projectRefs || group.every((ref) => source.includes(ref)),
+            ),
+          ].map((group) => {
+            const unitId = passageId(group, books),
+              state = reviewFor(records, unitId);
+            return {
+              id: unitId,
+              refs: group,
+              reason: state ? ("review" as const) : ("new" as const),
+              stage: state?.stage ?? 0,
+              due: state?.due,
+            };
+          })
+        : automaticQueue(records, Date.now(), minutes, source, !!projectRefs);
+      setSession({
+        items,
+        position: 0,
+        minutes: saved?.data.guided?.minutes ?? minutes,
+      });
+      if (items.length) setRefs(items[0].refs);
+      setPage("Guided");
+      setSidebarOpen(false);
       window.scrollTo({ top: 0, behavior: "instant" });
     },
     nextPractice: () => {
@@ -343,7 +363,9 @@ function App() {
             const active =
               page === target ||
               (target === "Memory" &&
-                ["Projects", "Practice", "Chapter Code"].includes(page));
+                ["Projects", "Practice", "Guided", "Chapter Code"].includes(
+                  page,
+                ));
             return (
               <button
                 key={name}
@@ -403,7 +425,9 @@ function App() {
                             ? "page"
                             : undefined
                         }
-                        onClick={() => ctx.go(p)}
+                        onClick={() =>
+                          p === "Practice" ? ctx.startDaily() : ctx.go(p)
+                        }
                       >
                         {p}
                       </button>
@@ -412,9 +436,19 @@ function App() {
                 </nav>
               )}
               {(page === "Projects" || page === "Memory") && (
-                <Projects {...ctx} />
+                <>
+                  <details className="manual-memory-tools">
+                    <summary>More memory tools</summary>
+                    <button onClick={() => ctx.go("Practice")}>
+                      Choose a memorization method
+                    </button>
+                  </details>
+                  <Projects {...ctx} />
+                </>
               )}
               {page === "Progress" && <Progress {...ctx} />}
+              {page === "Guided" && <Automatic {...ctx} />}
+
               {page === "Practice" && (
                 <Practice
                   key={(session?.position ?? "manual") + refs.join(",")}
@@ -458,6 +492,68 @@ function Heading({
       <h1>{title}</h1>
       {children}
     </div>
+  );
+}
+function Automatic(c: Ctx) {
+  const [reflect, setReflect] = useState(false);
+  const session = c.session;
+  if (!session || session.position >= session.items.length) {
+    const refs = session?.items.flatMap((item) => item.refs) ?? c.refs;
+    if (reflect && refs.length)
+      return (
+        <SessionFinish
+          books={c.books}
+          refs={refs}
+          count={session?.items.length ?? 0}
+          onDone={() => c.go("Today")}
+          onProgress={() => c.go("Progress")}
+          run={c.run}
+        />
+      );
+    return (
+      <section className="guided-complete">
+        <p className="eyebrow">READY WHEN YOU ARE</p>
+        <h1 tabIndex={-1}>All set for now.</h1>
+        <p>
+          {session?.items.length
+            ? "Your practice is saved. We’ll bring the right passages back for review."
+            : "Your new material is covered for today. Your next reviews will be ready when they are due."}
+        </p>
+        <button className="primary" onClick={() => c.go("Today")}>
+          Done for today
+        </button>
+        {!!refs.length && (
+          <details>
+            <summary>A moment to reflect or pray</summary>
+            <button onClick={() => setReflect(true)}>
+              Reflect on this passage
+            </button>
+          </details>
+        )}
+      </section>
+    );
+  }
+  const item = session.items[session.position];
+  return (
+    <GuidedPractice
+      key={item.refs.join("|") + session.position}
+      books={c.books}
+      records={c.records}
+      refs={item.refs}
+      remaining={session.items
+        .slice(session.position + 1)
+        .map((next) => next.refs)}
+      minutes={session.minutes}
+      position={session.position}
+      total={session.items.length}
+      onSaved={() => c.run(async () => {}, "")}
+      onNext={c.nextPractice}
+      onPause={() => c.go("Today")}
+      onManual={() => {
+        c.select(item.refs);
+        c.go("Practice");
+      }}
+    />
   );
 }
 function Passage({
@@ -583,7 +679,10 @@ function Today(c: Ctx) {
         : "Good evening";
   const draft = c.records
     .filter((e) => e.kind === "draft")
-    .filter((e) => e.data.scope === "practice" && e.data.text.trim())
+    .filter(
+      (e) =>
+        e.data.scope === "practice" && (e.data.text.trim() || e.data.guided),
+    )
     .sort((a, b) => b.data.updated - a.data.updated)[0];
   const currentRef = draft?.data.refs[0] ?? current?.[0] ?? c.refs[0];
   const completion = primary
@@ -644,7 +743,14 @@ function Today(c: Ctx) {
             {primary && !draft && (
               <p className="passage-reference">{label(c.books, currentRef)}</p>
             )}
-            <blockquote>{textFor(c.books, currentRef)}</blockquote>
+            {reviewFor(c.records, "verse:" + currentRef) ? (
+              <p className="ready-to-practise">
+                Your next passage is ready. We’ll choose the exercise and guide
+                you through it.
+              </p>
+            ) : (
+              <blockquote>{textFor(c.books, currentRef)}</blockquote>
+            )}
             {primary && !draft && (
               <>
                 <progress
@@ -661,101 +767,134 @@ function Today(c: Ctx) {
               <button
                 className="primary"
                 onClick={() => {
-                  if (draft) {
-                    c.select(draft.data.refs);
-                    c.go("Practice");
-                  } else c.startDaily(undefined, sessionMinutes);
+                  c.startDaily(
+                    draft && !draft.data.guided ? draft.data.refs : undefined,
+                    sessionMinutes,
+                  );
                 }}
               >
-                Continue Practice <ArrowRight size={18} aria-hidden="true" />
+                {draft?.data.guided ? "Continue practice" : "Start practice"}{" "}
+                <ArrowRight size={18} aria-hidden="true" />
               </button>
               {draft && (
-                <span className="draft-badge">Resume saved recall</span>
+                <span className="draft-badge">
+                  {draft.data.guided
+                    ? "Pick up where you left off"
+                    : "Saved typed recall"}
+                </span>
               )}
-              <span className="muted">About {sessionMinutes} minutes</span>
+              <span className="muted">
+                About {draft?.data.guided?.minutes ?? sessionMinutes} minutes
+              </span>
             </div>
-            {!draft && (
-              <label className="session-length">
-                Time for today
-                <select
-                  value={sessionMinutes}
-                  onChange={(e) => setSessionMinutes(+e.target.value)}
+            {draft && !draft.data.guided && (
+              <details className="saved-recall-options session-options">
+                <summary>Your saved typed recall</summary>
+                <p>
+                  Your unfinished writing is kept separately from automatic
+                  practice.
+                </p>
+                <button
+                  onClick={() => {
+                    c.select(draft.data.refs);
+                    c.go("Practice");
+                  }}
                 >
-                  <option value={5}>A short session · 5 minutes</option>
-                  {routineMinutes !== 5 && (
-                    <option value={routineMinutes}>
-                      My daily rhythm · {routineMinutes} minutes
-                    </option>
-                  )}
-                </select>
-              </label>
+                  Continue saved typed recall
+                </button>
+              </details>
+            )}
+            {!draft && (
+              <details className="session-options">
+                <summary>Session options</summary>
+                <label className="session-length">
+                  Time for today
+                  <select
+                    value={sessionMinutes}
+                    onChange={(e) => setSessionMinutes(+e.target.value)}
+                  >
+                    <option value={5}>A short session · 5 minutes</option>
+                    {routineMinutes !== 5 && (
+                      <option value={routineMinutes}>
+                        My daily rhythm · {routineMinutes} minutes
+                      </option>
+                    )}
+                  </select>
+                </label>
+              </details>
             )}
             <p className="rhythm-caption">
-              Read · Recall · Reflect · Pray. Take the steps you need.
+              First letters. One passage at a time. Everything saves as you go.
             </p>
           </section>
         </div>
       </div>
       {!attempts.length && !projects.length && (
-        <section className="first-session">
-          <p className="eyebrow">BEGIN WITH ONE PASSAGE</p>
-          <h2>A small beginning.</h2>
-          <p>
-            Choose a passage, read it in context, then try recalling it. Begin
-            with one verse and build toward a complete thought.
-          </p>
-          <label>
-            Your first passage
-            <input
-              value={firstPassage}
-              onChange={(e) => setFirstPassage(e.target.value)}
-              placeholder="Psalms 119:11"
-            />
-          </label>
-          <button
-            onClick={() =>
-              void c.run(async () => {
-                const chosen = parseRefs(firstPassage, c.books);
-                await put("project", {
-                  name: firstPassage.trim(),
-                  refs: chosen,
-                  primary: true,
-                  kind: "passage",
-                });
-                c.startDaily(chosen, 5);
-              }, "Your first passage is ready.")
-            }
-          >
-            Begin a five-minute session
-          </button>
-        </section>
+        <details className="first-passage-options">
+          <summary>Choose a different starting passage</summary>
+          <section className="first-session">
+            <p className="eyebrow">BEGIN WITH ONE PASSAGE</p>
+            <h2>A small beginning.</h2>
+            <p>
+              Choose a passage, read it in context, then try recalling it. Begin
+              with one verse and build toward a complete thought.
+            </p>
+            <label>
+              Your first passage
+              <input
+                value={firstPassage}
+                onChange={(e) => setFirstPassage(e.target.value)}
+                placeholder="Psalms 119:11"
+              />
+            </label>
+            <button
+              onClick={() =>
+                void c.run(async () => {
+                  const chosen = parseRefs(firstPassage, c.books);
+                  await put("project", {
+                    name: firstPassage.trim(),
+                    refs: chosen,
+                    primary: true,
+                    kind: "passage",
+                  });
+                  c.startDaily(chosen, 5);
+                }, "Your first passage is ready.")
+              }
+            >
+              Begin a five-minute session
+            </button>
+          </section>
+        </details>
       )}
-      <div className="daily-plan">
-        <div>
-          <span className="eyebrow">RETURN & REMEMBER</span>
-          <h2>
-            {due.length
-              ? `${due.length} reviews ready`
-              : "A gentle place to begin"}
-          </h2>
-          <p>
-            {due.length
-              ? "Begin with familiar words before learning something new."
-              : "Choose a passage, read slowly, and begin when you are ready."}
-          </p>
+      <details className="today-plan">
+        <summary>Your practice plan</summary>
+        <div className="daily-plan">
+          <div>
+            <span className="eyebrow">RETURN & REMEMBER</span>
+            <h2>
+              {due.length
+                ? `${due.length} reviews ready`
+                : "A gentle place to begin"}
+            </h2>
+            <p>
+              {due.length
+                ? "Begin with familiar words before learning something new."
+                : "Choose a passage, read slowly, and begin when you are ready."}
+            </p>
+          </div>
+          <div>
+            <span className="eyebrow">ROOM FOR SOMETHING NEW</span>
+            <h2>
+              {newMaterialAllowance(c.records, Date.now(), sessionMinutes)}{" "}
+              verses suggested
+            </h2>
+            <p>Missed days carry forward. There is no streak to protect.</p>
+            <button className="text-button" onClick={() => c.go("Memory")}>
+              Your memory projects <ArrowRight size={16} aria-hidden="true" />
+            </button>
+          </div>
         </div>
-        <div>
-          <span className="eyebrow">ROOM FOR SOMETHING NEW</span>
-          <h2>
-            {newMaterialAllowance(c.records, Date.now(), sessionMinutes)} verses
-            suggested
-          </h2>
-          <p>Missed days carry forward. There is no streak to protect.</p>
-          <button className="text-button" onClick={() => c.go("Memory")}>
-            Your memory projects <ArrowRight size={16} aria-hidden="true" />
-          </button>
-        </div>
-      </div>
+      </details>
       {c.records
         .filter((e) => e.kind === "draft")
         .filter((e) => e.data.scope === "reflection" && e.data.text.trim())
@@ -824,7 +963,9 @@ function Progress(c: Ctx) {
     primary = projects.find((e) => e.data.primary),
     attempts = c.records
       .filter((e) => e.kind === "attempt")
-      .filter((e) => e.data.evidence !== "self"),
+      .filter(
+        (e) => e.data.evidence !== "self" && e.data.evidence !== "initials",
+      ),
     mastered = reviews.filter((r) => r.stage >= 3 && r.id.startsWith("verse:")),
     weak = [...reviews].sort((a, b) => a.accuracy - b.accuracy).slice(0, 5);
   const unitFor = (key: string) =>
@@ -876,8 +1017,10 @@ function Progress(c: Ctx) {
           least 45 days. Every stage remains in review.
         </p>
         <p>
-          Spoken reviews use your own assessment; typed reviews compare the KJV
-          words on this device. These describe recall, not spiritual maturity.
+          Spoken and first-letter recall can use your own assessment. Typed
+          reviews compare the KJV words on this device. First-letter training
+          alone does not verify the full wording. These describe recall, not
+          spiritual maturity.
         </p>
         <p>
           Estimated retention:{" "}
@@ -911,8 +1054,7 @@ function Progress(c: Ctx) {
                   <progress value={done} max={p.data.refs.length} />
                   <button
                     onClick={() => {
-                      c.select(p.data.refs);
-                      c.go("Practice");
+                      c.startDaily(p.data.refs);
                     }}
                   >
                     Practice {p.data.primary ? "primary project" : "project"} →
@@ -954,7 +1096,9 @@ function Progress(c: Ctx) {
               · {stages[s.stage]} ·{" "}
               {s.evidence === "self"
                 ? "Self-assessed"
-                : Math.round(s.accuracy * 100) + "% word accuracy"}
+                : s.evidence === "initials"
+                  ? "Initial-letter practice"
+                  : Math.round(s.accuracy * 100) + "% word accuracy"}
             </button>
           ))}
         </section>
@@ -1312,12 +1456,22 @@ function Bible(c: Ctx) {
             <button
               className="primary"
               onClick={() => {
-                c.select(selection);
-                c.go("Practice");
+                c.startDaily(selection);
               }}
             >
               Practice {selected.length || "passage"} selected
             </button>
+            <details className="selection-extra">
+              <summary>More passage options</summary>
+              <button
+                onClick={() => {
+                  c.select(selection);
+                  c.go("Practice");
+                }}
+              >
+                Whole passage / recitation
+              </button>
+            </details>
             <button
               onClick={() => {
                 setProjectName(
@@ -1588,89 +1742,98 @@ function Projects(c: Ctx) {
         eyebrow="PURPOSEFUL, PERSONAL PROGRESS"
         title="Your memory projects"
       />
-      <section>
-        <h2>Create a project</h2>
-        <label>
-          Name
-          <input value={name} onChange={(e) => setName(e.target.value)} />
-        </label>
-        <label>
-          Project scope
-          <select
-            aria-label="Project scope"
-            value={kind}
-            onChange={(e) => setKind(e.target.value as any)}
-          >
-            <option value="passage">Verses or ranges</option>
-            <option value="chapter">Complete chapter</option>
-            <option value="book">Complete book</option>
-            <option value="topic">Noncontiguous topic passages</option>
-          </select>
-        </label>
-        {["chapter", "book"].includes(kind) ? (
-          <div className="controls">
-            <label>
-              Book
-              <select
-                aria-label="Book"
-                value={b}
-                onChange={(e) => {
-                  setB(+e.target.value);
-                  setCh(1);
-                }}
-              >
-                {c.books.map((v) => (
-                  <option key={v.id} value={v.id}>
-                    {v.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-            {kind === "chapter" && (
-              <label>
-                Chapter
-                <input
-                  type="number"
-                  min="1"
-                  max={c.books[b - 1].chapters.length}
-                  value={ch}
-                  onChange={(e) => setCh(+e.target.value)}
-                />
-              </label>
-            )}
-          </div>
-        ) : (
-          <label>
-            References (separate passages with semicolons)
-            <textarea
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-            />
-          </label>
-        )}
-        <button
-          className="primary"
-          onClick={() =>
-            void c.run(async () => {
-              if (!name.trim()) throw Error("Give your project a name.");
-              if (kind === "chapter" && !c.books[b - 1].chapters[ch - 1])
-                throw Error("Choose a valid chapter.");
-              const refs = ["chapter", "book"].includes(kind)
-                ? allRefs(c.books, b, kind === "chapter" ? ch : undefined)
-                : parseRefs(input, c.books);
-              await put("project", {
-                name: name.trim(),
-                refs,
-                kind,
-                primary: !c.records.some((e) => e.kind === "project"),
-              });
-              setName("");
-            })
-          }
-        >
-          Plant this project
+      <div className="memory-start">
+        <button className="primary" onClick={() => c.startDaily()}>
+          Start practice
         </button>
-      </section>
+        <p>We’ll choose the passage and the right amount of help.</p>
+      </div>
+      <details className="project-create">
+        <summary>Add a passage or project</summary>
+        <section>
+          <h2>Create a project</h2>
+          <label>
+            Name
+            <input value={name} onChange={(e) => setName(e.target.value)} />
+          </label>
+          <label>
+            Project scope
+            <select
+              aria-label="Project scope"
+              value={kind}
+              onChange={(e) => setKind(e.target.value as any)}
+            >
+              <option value="passage">Verses or ranges</option>
+              <option value="chapter">Complete chapter</option>
+              <option value="book">Complete book</option>
+              <option value="topic">Noncontiguous topic passages</option>
+            </select>
+          </label>
+          {["chapter", "book"].includes(kind) ? (
+            <div className="controls">
+              <label>
+                Book
+                <select
+                  aria-label="Book"
+                  value={b}
+                  onChange={(e) => {
+                    setB(+e.target.value);
+                    setCh(1);
+                  }}
+                >
+                  {c.books.map((v) => (
+                    <option key={v.id} value={v.id}>
+                      {v.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              {kind === "chapter" && (
+                <label>
+                  Chapter
+                  <input
+                    type="number"
+                    min="1"
+                    max={c.books[b - 1].chapters.length}
+                    value={ch}
+                    onChange={(e) => setCh(+e.target.value)}
+                  />
+                </label>
+              )}
+            </div>
+          ) : (
+            <label>
+              References (separate passages with semicolons)
+              <textarea
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+              />
+            </label>
+          )}
+          <button
+            className="primary"
+            onClick={() =>
+              void c.run(async () => {
+                if (!name.trim()) throw Error("Give your project a name.");
+                if (kind === "chapter" && !c.books[b - 1].chapters[ch - 1])
+                  throw Error("Choose a valid chapter.");
+                const refs = ["chapter", "book"].includes(kind)
+                  ? allRefs(c.books, b, kind === "chapter" ? ch : undefined)
+                  : parseRefs(input, c.books);
+                await put("project", {
+                  name: name.trim(),
+                  refs,
+                  kind,
+                  primary: !c.records.some((e) => e.kind === "project"),
+                });
+                setName("");
+              })
+            }
+          >
+            Plant this project
+          </button>
+        </section>
+      </details>
       {c.records
         .filter((e) => e.kind === "project")
         .map((p) => (

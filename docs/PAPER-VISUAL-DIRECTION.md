@@ -13,3 +13,7 @@ No third-party photo or font asset is bundled from the reference. The app's orig
 ## Scripture experience refinement
 
 The agreed UX revision keeps the palette and circular calendar but gives Scripture and its primary action priority over the date. The date is smaller and the home calendar is expandable. The reader opens in continuous layout with search and preferences available in disclosures. See `SCRIPTURE-EXPERIENCE.md` for the accompanying practice and retention changes.
+
+## Automatic practice refinement
+
+The visual tokens and five primary destinations remain. Today now leads with one Start practice action, and the focused exercise uses a Read/Learn/Remember indicator with progressively reduced word cues. Session settings, plan details, project creation and advanced methods are disclosures. First-letter entry is the default, with compact spacing for phone typing. See `AUTOMATIC-PRACTICE.md`.

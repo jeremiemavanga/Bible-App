@@ -35,7 +35,7 @@ export interface ReviewState {
   learningStartedAt?: number;
   lastSpacedAt?: number;
   lastReviewedAt?: number;
-  evidence?: "typed" | "self";
+  evidence?: "typed" | "self" | "initials";
 }
 export interface ReviewAttempt {
   unitId: string;
@@ -46,7 +46,8 @@ export interface ReviewAttempt {
   self: number;
   transitionAccuracy: number;
   referenceAccuracy?: number;
-  evidence?: "typed" | "self";
+  evidence?: "typed" | "self" | "initials";
+  exercise?: "guided-learning" | "initials-recall" | "written-recall";
 }
 export interface MemoryProject {
   name: string;
@@ -127,6 +128,18 @@ export interface LocalDraft {
   step?: number;
   section?: string;
   recallMode?: "typed" | "spoken";
+  guided?: GuidedDraft;
+}
+export interface GuidedDraft {
+  version: 1;
+  phase:
+    "read" | "follow" | "cues" | "recall" | "written" | "confirm" | "feedback";
+  mode: "learn" | "recall";
+  token: string;
+  remaining: Ref[][];
+  minutes: number;
+  mistakes: number;
+  outcome?: { accuracy: number; evidence: "typed" | "self" | "initials" };
 }
 export interface RecordData {
   draft: LocalDraft;
@@ -246,6 +259,19 @@ export function schedule(
     accuracy: 0,
     reviews: 0,
   };
+  if (attempt.evidence === "initials") {
+    // A guided lesson records practice, not a failed or successful independent
+    // test. Preserve established recall evidence while inviting a fresh check.
+    return {
+      ...old,
+      due: previous && old.due > attempt.at ? old.due : attempt.at + 0.5 * day,
+      interval: previous && old.due > attempt.at ? old.interval : 0.5,
+      reviews: old.reviews + 1,
+      schedulerVersion: 2,
+      lastReviewedAt: attempt.at,
+      evidence: "initials",
+    };
+  }
   const success =
     attempt.accuracy >= 0.97 &&
     attempt.self >= 3 &&

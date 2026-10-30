@@ -19,7 +19,7 @@ test("five destinations, calm home, local reader sizing and dedicated progress",
     page.getByText("Established verses", { exact: true }),
   ).toHaveCount(0);
   const button = page.getByRole("button", {
-    name: "Continue Practice",
+    name: "Start practice",
     exact: false,
   });
   await expect(button).toHaveCSS("background-color", "rgb(32, 33, 31)");

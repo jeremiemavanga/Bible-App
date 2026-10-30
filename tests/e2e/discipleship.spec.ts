@@ -1,6 +1,7 @@
 import { test, expect, type Page } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
-import { navigate } from "./navigation";
+import { navigate, fullPassagePractice } from "./navigation";
+import { chooseFullWording } from "./guided";
 const verse =
   "Thy word have I hid in mine heart, that I might not sin against thee.";
 async function records(page: Page): Promise<any[]> {
@@ -99,9 +100,7 @@ test("reading context is available offline and records assistance before a typed
   expect(rows.find((row) => row.kind === "review").data.stage).toBe(0);
   await navigate(page, "Bible");
   await page.getByLabel("Search reference or words").fill("John 3:36-4:2");
-  await page
-    .getByRole("button", { name: "Practice passage selected", exact: true })
-    .click();
+  await fullPassagePractice(page);
   await page.getByLabel("Recitation section").selectOption("43:4");
   await page.locator(".scripture-context > summary").click();
   await expect(
@@ -167,25 +166,28 @@ test("a first short session leads through optional reflection and prayer and rec
   page,
 }) => {
   await page.goto("/");
+  await page.locator(".first-passage-options > summary").click();
   await page
     .getByRole("button", { name: "Begin a five-minute session", exact: true })
     .click();
   await expect(
-    page.getByText("DAILY PRACTICE · 1 OF 1", { exact: true }),
+    page.getByText("1 of 1 passages", { exact: true }),
   ).toBeVisible();
-  await page.getByLabel("Memorization method").selectOption("Type from memory");
-  await page.getByLabel("Type or transcribe your recall").fill(verse);
-  await page
-    .getByRole("button", { name: "Compare recall", exact: true })
-    .click();
-  await page
-    .getByRole("button", { name: "Save review & schedule next", exact: true })
-    .click();
+  await chooseFullWording(page);
+  await page.getByLabel("Your recall", { exact: true }).fill(verse);
+  await page.getByRole("button", { name: "Check & save", exact: true }).click();
   await expect(
-    page.getByRole("button", { name: "Review recorded", exact: true }),
-  ).toBeDisabled();
+    page.getByRole("heading", { name: "Practice saved.", exact: true }),
+  ).toBeVisible();
   await page
     .getByRole("button", { name: "Finish session", exact: true })
+    .click();
+  await expect(
+    page.getByRole("heading", { name: "All set for now.", exact: true }),
+  ).toBeVisible();
+  await page.getByText("A moment to reflect or pray", { exact: true }).click();
+  await page
+    .getByRole("button", { name: "Reflect on this passage", exact: true })
     .click();
   await expect(
     page.getByRole("heading", { name: "Enough for today." }),
@@ -229,8 +231,10 @@ test("short session choice leaves the normal routine unchanged and backup transf
 }) => {
   await page.goto("/");
   await expect(page.locator(".home-calendar")).not.toHaveAttribute("open", "");
+  await page.locator(".session-options > summary").click();
   await page.getByLabel("Time for today").selectOption("5");
   await page.reload();
+  await page.locator(".session-options > summary").click();
   await expect(page.getByLabel("Time for today")).not.toHaveValue("5");
   await page
     .getByRole("button", { name: "Backup & transfer", exact: true })

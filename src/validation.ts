@@ -1,6 +1,7 @@
 import { isStoredMedia } from "./media";
 import { verseCounts } from "./canon";
 import type { Entry, Kind, Translation } from "./domain";
+import { guidedPhases } from "./automatic";
 const isString = (v: unknown) => typeof v === "string" && v.length <= 200000;
 const number = (v: unknown, min = 0, max = Number.MAX_SAFE_INTEGER) =>
   typeof v === "number" && Number.isFinite(v) && v >= min && v <= max;
@@ -71,7 +72,29 @@ export function validateEntry(e: Entry) {
         (Number.isInteger(d.step) && number(d.step, 1, 31102))) &&
       (d.section === undefined || isString(d.section)) &&
       (d.recallMode === undefined ||
-        ["typed", "spoken"].includes(d.recallMode)),
+        ["typed", "spoken"].includes(d.recallMode)) &&
+      (d.guided === undefined ||
+        (d.scope === "practice" &&
+          d.guided?.version === 1 &&
+          guidedPhases.includes(d.guided.phase) &&
+          ["learn", "recall"].includes(d.guided.mode) &&
+          typeof d.guided.token === "string" &&
+          d.guided.token.length > 0 &&
+          d.guided.token.length <= 128 &&
+          number(d.guided.minutes, 5, 190) &&
+          number(d.guided.mistakes) &&
+          Array.isArray(d.guided.remaining) &&
+          d.guided.remaining.length <= 256 &&
+          d.guided.remaining.every(refs) &&
+          d.guided.remaining.reduce(
+            (count: number, group: unknown[]) => count + group.length,
+            0,
+          ) <= 31102 &&
+          (!d.guided.outcome ||
+            (number(d.guided.outcome.accuracy, 0, 1) &&
+              ["typed", "self", "initials"].includes(
+                d.guided.outcome.evidence,
+              ))))),
     project: () =>
       texts(["name"]) &&
       refs(d.refs) &&
@@ -89,7 +112,8 @@ export function validateEntry(e: Entry) {
       ["learningStartedAt", "lastSpacedAt", "lastReviewedAt"].every(
         (key) => d[key] === undefined || number(d[key]),
       ) &&
-      (d.evidence === undefined || ["typed", "self"].includes(d.evidence)),
+      (d.evidence === undefined ||
+        ["typed", "self", "initials"].includes(d.evidence)),
     attempt: () =>
       texts(["unitId"]) &&
       numbers(["at", "hints"]) &&
@@ -99,7 +123,12 @@ export function validateEntry(e: Entry) {
       number(d.transitionAccuracy, 0, 1) &&
       (d.referenceAccuracy === undefined ||
         number(d.referenceAccuracy, 0, 1)) &&
-      (d.evidence === undefined || ["typed", "self"].includes(d.evidence)),
+      (d.evidence === undefined ||
+        ["typed", "self", "initials"].includes(d.evidence)) &&
+      (d.exercise === undefined ||
+        ["guided-learning", "initials-recall", "written-recall"].includes(
+          d.exercise,
+        )),
     anchor: () =>
       validRef(d.ref) &&
       texts([

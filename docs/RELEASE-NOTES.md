@@ -2,6 +2,12 @@
 
 Validated in the cloud workspace on October 29, 2026. The app is implemented and the local development/production workflows run. This is **not** a claim of physical Apple-device certification, a deployed website, or cleared distribution of third-party translations.
 
+## Automatic first-letter practice revision
+
+Implemented the user's preferred first-letter typing as the default daily flow, with automatic passage/exercise selection, decreasing cues, transactional saving, offline step/queue recovery, and optional full-word/manual methods. The existing visual style, content, histories and privacy/licensing rules remain. Guided lessons preserve prior independent mastery and accuracy; self-assessed initials and verified word scores are clearly distinguished. See `AUTOMATIC-PRACTICE.md`.
+
+Local validation: **46 unit/domain/backup checks and 75 browser scenarios passed** across desktop, phone and tablet Chromium. Targeted automatic-practice scenarios were rerun after focus and scheduling refinements. Source-integrity verification, root and `/Bible-App/` production builds pass. The Pages-path smoke test verifies offline provisioning, one-tap first-letter entry and saved-input recovery after reload. Native WebKit and physical Apple-device verification remain pending; GitHub verification is still required before publishing.
+
 ## Scripture experience revision
 
 Implemented the agreed reading, daily-rhythm and retention improvements. See `SCRIPTURE-EXPERIENCE.md` for behavior, history compatibility, self-assessed oral evidence and scheduling policy. Local validation: **36 unit/domain/backup checks and 57 browser scenarios passed** across desktop, phone and tablet Chromium. Strengthened multi-chapter context and session-completion accessibility checks were rerun on all three layouts after their final refinements. Production root and `/Bible-App/` builds pass; the Pages-path smoke test confirms offline reload, continuous reading, alias search and surrounding-chapter navigation. Native WebKit and physical Apple-device checks remain pending. GitHub workflow status could not be read here because the GitHub API returned Forbidden; the existing CI verification gate remains required before publishing.
