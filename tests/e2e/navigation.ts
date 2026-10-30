@@ -23,4 +23,10 @@ export async function navigate(page: Page, destination: string) {
       })
       .click();
   }
+  // Test scenarios that edit navigation or preferences explicitly open the
+  // reader's disclosures; the user-facing default keeps Scripture visible.
+  if (destination === "Bible") {
+    await page.locator(".reader-navigation-tools > summary").click();
+    await page.locator(".reader-settings > summary").click();
+  }
 }

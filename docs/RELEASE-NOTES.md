@@ -2,10 +2,13 @@
 
 Validated in the cloud workspace on October 29, 2026. The app is implemented and the local development/production workflows run. This is **not** a claim of physical Apple-device certification, a deployed website, or cleared distribution of third-party translations.
 
-## Current learning and reading update
+## Scripture experience revision
+
+Implemented the agreed reading, daily-rhythm and retention improvements. See `SCRIPTURE-EXPERIENCE.md` for behavior, history compatibility, self-assessed oral evidence and scheduling policy. Local validation: **36 unit/domain/backup checks and 57 browser scenarios passed** across desktop, phone and tablet Chromium. Strengthened multi-chapter context and session-completion accessibility checks were rerun on all three layouts after their final refinements. Production root and `/Bible-App/` builds pass; the Pages-path smoke test confirms offline reload, continuous reading, alias search and surrounding-chapter navigation. Native WebKit and physical Apple-device checks remain pending. GitHub workflow status could not be read here because the GitHub API returned Forbidden; the existing CI verification gate remains required before publishing.
+
+## Previous learning and reading update
 
 Local verification passed: **28 unit/domain/backup checks and 42 browser scenarios** on desktop, iPhone-size and iPad-size Chromium. The targeted 18-scenario improvements subset was rerun after the final save/reader safeguards. Production build and YAML formatting validation pass. Native WebKit remains pending GitHub Actions because its browser download is denied in this cloud instance. Pages deployment now calls full verification and will not publish until it passes.
-
 
 Guided reviews-first daily sessions, bounded new material, per-verse word alignment independent of line breaks, actual hiding/reveal tracking, draft recovery, resumed chapter/text size, faster alias-aware reference search, and contextual passage-to-project/reflection actions are implemented. The phone home now surfaces Scripture before the calendar. See `LEARNING-UPDATE.md`.
 

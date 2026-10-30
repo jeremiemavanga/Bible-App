@@ -16,7 +16,7 @@ test("five destinations, calm home, local reader sizing and dedicated progress",
     page.getByRole("heading", { name: "Today's Scripture" }),
   ).toBeVisible();
   await expect(
-    page.getByText("Estimated retention", { exact: true }),
+    page.getByText("Established verses", { exact: true }),
   ).toHaveCount(0);
   const button = page.getByRole("button", {
     name: "Continue Practice",
@@ -32,7 +32,7 @@ test("five destinations, calm home, local reader sizing and dedicated progress",
     page.getByRole("heading", { name: "Quiet, lasting growth" }),
   ).toBeVisible();
   await expect(
-    page.getByText("Estimated retention", { exact: true }),
+    page.getByText("Established verses", { exact: true }),
   ).toBeVisible();
   await expect(
     page.getByRole("heading", { name: "Your practice calendar" }),
@@ -65,6 +65,7 @@ test("calendar handles leap February and marks only recorded practice", async ({
 }) => {
   await page.clock.install({ time: new Date("2028-02-29T12:00:00Z") });
   await page.goto("/");
+  await page.locator(".home-calendar > summary").click();
   await expect(page.locator(".poster-day")).toHaveText("29");
   await expect(page.locator(".poster-month")).toHaveText("February");
   await expect(page.locator(".date-panel .month-dot")).toHaveCount(35);
@@ -99,6 +100,7 @@ test("calendar handles leap February and marks only recorded practice", async ({
     database.close();
   });
   await page.reload();
+  await page.locator(".home-calendar > summary").click();
   await expect(page.locator(".date-panel .month-dot.practiced")).toHaveCount(1);
   await expect(
     page.locator(".date-panel .month-dot.practiced"),

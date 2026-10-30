@@ -1,4 +1,5 @@
 import Dexie, { type Table } from "dexie";
+import { upgradedReviews } from "./reviews";
 import {
   type Entry,
   type Kind,
@@ -15,6 +16,12 @@ export class WordDB extends Dexie {
   }
 }
 export const db = new WordDB();
+export async function reconcileReviews(database = db) {
+  await database.transaction("rw", database.records, async () => {
+    const updates = upgradedReviews(await database.records.toArray());
+    if (updates.length) await database.records.bulkPut(updates);
+  });
+}
 export async function put<K extends Kind>(
   kind: K,
   data: RecordData[K],

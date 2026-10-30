@@ -9,3 +9,7 @@ The user's October 30, 2026 image reference supersedes the color and typography 
 - The reader, memory exercises, Chapter Code, meditation, progress, persistent audio player, forms and backup controls inherit the same light design tokens. Focus indicators, contrast, reduced motion and 44px targets remain in place.
 
 No third-party photo or font asset is bundled from the reference. The app's original installation icons were recolored to match. Historical design specifications and screenshots remain in Git history for provenance; this file defines the current direction.
+
+## Scripture experience refinement
+
+The agreed UX revision keeps the palette and circular calendar but gives Scripture and its primary action priority over the date. The date is smaller and the home calendar is expandable. The reader opens in continuous layout with search and preferences available in disclosures. See `SCRIPTURE-EXPERIENCE.md` for the accompanying practice and retention changes.

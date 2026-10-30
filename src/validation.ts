@@ -69,7 +69,9 @@ export function validateEntry(e: Entry) {
       (d.hiding === undefined || number(d.hiding, 0, 100)) &&
       (d.step === undefined ||
         (Number.isInteger(d.step) && number(d.step, 1, 31102))) &&
-      (d.section === undefined || isString(d.section)),
+      (d.section === undefined || isString(d.section)) &&
+      (d.recallMode === undefined ||
+        ["typed", "spoken"].includes(d.recallMode)),
     project: () =>
       texts(["name"]) &&
       refs(d.refs) &&
@@ -82,7 +84,12 @@ export function validateEntry(e: Entry) {
       numbers(["due", "interval", "reviews"]) &&
       Number.isInteger(d.stage) &&
       number(d.stage, 0, 5) &&
-      number(d.accuracy, 0, 1),
+      number(d.accuracy, 0, 1) &&
+      (d.schedulerVersion === undefined || d.schedulerVersion === 2) &&
+      ["learningStartedAt", "lastSpacedAt", "lastReviewedAt"].every(
+        (key) => d[key] === undefined || number(d[key]),
+      ) &&
+      (d.evidence === undefined || ["typed", "self"].includes(d.evidence)),
     attempt: () =>
       texts(["unitId"]) &&
       numbers(["at", "hints"]) &&
@@ -90,7 +97,9 @@ export function validateEntry(e: Entry) {
       number(d.self, 1, 4) &&
       number(d.accuracy, 0, 1) &&
       number(d.transitionAccuracy, 0, 1) &&
-      (d.referenceAccuracy === undefined || number(d.referenceAccuracy, 0, 1)),
+      (d.referenceAccuracy === undefined ||
+        number(d.referenceAccuracy, 0, 1)) &&
+      (d.evidence === undefined || ["typed", "self"].includes(d.evidence)),
     anchor: () =>
       validRef(d.ref) &&
       texts([
@@ -120,7 +129,10 @@ export function validateEntry(e: Entry) {
       typeof d.saturday === "boolean" &&
       (d.lastBackup === undefined || number(d.lastBackup)) &&
       (!d.reading ||
-        (validRef(d.reading.ref) && number(d.reading.size, 22, 38))),
+        (validRef(d.reading.ref) &&
+          number(d.reading.size, 22, 38) &&
+          (d.reading.layout === undefined ||
+            ["flow", "verses"].includes(d.reading.layout)))),
     translation: () => validTranslation(d),
   };
   if (!check[e.kind]())

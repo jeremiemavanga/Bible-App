@@ -31,6 +31,11 @@ export interface ReviewState {
   interval: number;
   accuracy: number;
   reviews: number;
+  schedulerVersion?: 2;
+  learningStartedAt?: number;
+  lastSpacedAt?: number;
+  lastReviewedAt?: number;
+  evidence?: "typed" | "self";
 }
 export interface ReviewAttempt {
   unitId: string;
@@ -41,6 +46,7 @@ export interface ReviewAttempt {
   self: number;
   transitionAccuracy: number;
   referenceAccuracy?: number;
+  evidence?: "typed" | "self";
 }
 export interface MemoryProject {
   name: string;
@@ -94,7 +100,7 @@ export interface NotificationPreference {
   prompts: boolean;
   saturday: boolean;
   lastBackup?: number;
-  reading?: { ref: Ref; size: number };
+  reading?: { ref: Ref; size: number; layout?: "flow" | "verses" };
 }
 export interface AudioAsset {
   name: string;
@@ -120,6 +126,7 @@ export interface LocalDraft {
   hiding?: number;
   step?: number;
   section?: string;
+  recallMode?: "typed" | "spoken";
 }
 export interface RecordData {
   draft: LocalDraft;
@@ -244,27 +251,49 @@ export function schedule(
     attempt.self >= 3 &&
     attempt.hints === 0 &&
     attempt.difficulty <= 2;
+  const learningStartedAt =
+    old.learningStartedAt ?? (success ? attempt.at : undefined);
+  const lastSpacedAt = old.lastSpacedAt;
+  // Later stages need successful recalls across days, including at least
+  // six weeks for long-term retention. Early rehearsals keep the due date.
+  const minimumAge = [0, 0, 1, 4, 14, 45];
+  const spaced =
+    !previous ||
+    lastSpacedAt === undefined ||
+    (attempt.at >= old.due && attempt.at - lastSpacedAt >= day);
+  const promote =
+    success &&
+    spaced &&
+    attempt.at - (learningStartedAt ?? attempt.at) >=
+      minimumAge[Math.min(5, old.stage + 1)] * day;
   const stage = success
-    ? Math.min(5, old.stage + 1)
+    ? Math.min(5, old.stage + Number(promote))
     : Math.max(
         0,
         old.stage - (attempt.accuracy < 0.7 || attempt.self === 1 ? 2 : 1),
       );
   const intervals = [0.25, 1, 3, 7, 30, 90];
   const interval = success
-    ? stage === 5
-      ? Math.min(365, Math.max(90, old.interval * 1.6))
-      : intervals[stage]
+    ? !spaced
+      ? old.interval
+      : stage === 5
+        ? Math.min(365, Math.max(90, old.interval * 1.6))
+        : intervals[stage]
     : attempt.hints
       ? 0.5
       : 0.25;
   return {
     id: attempt.unitId,
     stage,
-    due: attempt.at + interval * day,
+    due: success && previous && !spaced ? old.due : attempt.at + interval * day,
     interval,
     accuracy: attempt.accuracy,
     reviews: old.reviews + 1,
+    schedulerVersion: 2,
+    learningStartedAt,
+    lastSpacedAt: success && spaced ? attempt.at : lastSpacedAt,
+    lastReviewedAt: attempt.at,
+    evidence: attempt.evidence ?? "typed",
   };
 }
 export function retention(s: ReviewState, now: number) {

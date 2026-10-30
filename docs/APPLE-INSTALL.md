@@ -13,6 +13,7 @@ For this repository’s GitHub Pages site, first follow [GITHUB-PAGES.md](GITHUB
 
 - Open all 66 book selectors, search and read passages after Airplane Mode/network disconnection; close and reopen the installed app offline.
 - Use all six practice methods, type an intentional omission, verify grading, save reviews and reopen to verify persistence.
+- Check the default continuous reader and verse selection, surrounding-chapter context, the five-minute first session, spoken self-assessment without microphone permission, and the optional reflection/prayer finish. Verify keyboard and VoiceOver focus when a session ends.
 - Complete a whole chapter with progressive hints and verify separate verse/chapter records and next due dates.
 - Save a visual memory card, a collection and a journal reflection; restore an encrypted backup into a fresh installed context and compare them.
 - Import authorized audio; test play/pause, rate, playlist/repeat, lock-screen controls and background playback. Codec, silent-mode and OS suspension behavior can differ.

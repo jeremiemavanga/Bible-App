@@ -23,7 +23,16 @@ import {
   ChevronRight,
 } from "lucide-react";
 import { registerSW } from "virtual:pwa-register";
-import { db, put, loadBible, download, updatePreferences } from "./db";
+import {
+  db,
+  put,
+  loadBible,
+  download,
+  updatePreferences,
+  reconcileReviews,
+} from "./db";
+import { ContextPassage } from "./scripture-context";
+import { SessionFinish } from "./session-finish";
 import { encrypt, decrypt } from "./backup";
 import {
   type BibleBook,
@@ -92,8 +101,8 @@ interface Ctx {
   recallOnly: boolean;
   run: (fn: () => Promise<unknown>, message?: string) => Promise<void>;
   prefs: NotificationPreference;
-  session: { items: PracticeItem[]; position: number } | null;
-  startDaily: (refs?: Ref[]) => void;
+  session: { items: PracticeItem[]; position: number; minutes: number } | null;
+  startDaily: (refs?: Ref[], minutes?: number) => void;
   nextPractice: () => void;
 }
 function App() {
@@ -126,6 +135,7 @@ function App() {
   useEffect(() => {
     void run(async () => {
       const loaded = await loadBible();
+      await reconcileReviews();
       await refresh();
       setBooks(loaded);
     }, "");
@@ -211,13 +221,14 @@ function App() {
     run,
     prefs,
     session,
-    startDaily: (projectRefs) => {
+    startDaily: (projectRefs, requestedMinutes) => {
       const source =
         projectRefs ??
         records.filter((e) => e.kind === "project").find((e) => e.data.primary)
           ?.data.refs ??
         refs;
       const minutes =
+        requestedMinutes ??
         prefs.minutes + (new Date().getDay() === 6 && prefs.saturday ? 10 : 0);
       const items = dailyQueue(
         records,
@@ -232,7 +243,7 @@ function App() {
         );
         return;
       }
-      setSession({ items, position: 0 });
+      setSession({ items, position: 0, minutes });
       setRefs(items[0].refs);
       setRecallOnly(items[0].reason === "review");
       setPage("Practice");
@@ -426,11 +437,7 @@ function App() {
               <button onClick={() => location.reload()}>Retry loading</button>
             </section>
           )}
-          <footer>
-            Private by design · No account · No automatic sync
-            <br />
-            Keep an encrypted backup. Browser storage can be deleted or evicted.
-          </footer>
+          <footer>Private by design · Scripture for a lifetime.</footer>
         </main>
       </div>
     </>
@@ -546,6 +553,10 @@ function useLocalDay() {
   return day;
 }
 function Today(c: Ctx) {
+  const routineMinutes =
+    c.prefs.minutes + (new Date().getDay() === 6 && c.prefs.saturday ? 10 : 0);
+  const [sessionMinutes, setSessionMinutes] = useState(routineMinutes);
+  const [firstPassage, setFirstPassage] = useState("Psalms 119:11");
   const reviews = c.records
       .filter((e) => e.kind === "review")
       .map((e) => e.data),
@@ -605,7 +616,10 @@ function Today(c: Ctx) {
               {now.getFullYear()}
             </span>
           </time>
-          <MonthCalendar records={c.records} now={now} />
+          <details className="home-calendar">
+            <summary>Your practice calendar</summary>
+            <MonthCalendar records={c.records} now={now} />
+          </details>
         </div>
         <div className="today-reading">
           <Heading eyebrow="THE WORD WITHIN" title="Today's Scripture">
@@ -650,7 +664,7 @@ function Today(c: Ctx) {
                   if (draft) {
                     c.select(draft.data.refs);
                     c.go("Practice");
-                  } else c.startDaily();
+                  } else c.startDaily(undefined, sessionMinutes);
                 }}
               >
                 Continue Practice <ArrowRight size={18} aria-hidden="true" />
@@ -658,16 +672,64 @@ function Today(c: Ctx) {
               {draft && (
                 <span className="draft-badge">Resume saved recall</span>
               )}
-              <span className="muted">
-                About{" "}
-                {c.prefs.minutes +
-                  (now.getDay() === 6 && c.prefs.saturday ? 10 : 0)}{" "}
-                minutes
-              </span>
+              <span className="muted">About {sessionMinutes} minutes</span>
             </div>
+            {!draft && (
+              <label className="session-length">
+                Time for today
+                <select
+                  value={sessionMinutes}
+                  onChange={(e) => setSessionMinutes(+e.target.value)}
+                >
+                  <option value={5}>A short session · 5 minutes</option>
+                  {routineMinutes !== 5 && (
+                    <option value={routineMinutes}>
+                      My daily rhythm · {routineMinutes} minutes
+                    </option>
+                  )}
+                </select>
+              </label>
+            )}
+            <p className="rhythm-caption">
+              Read · Recall · Reflect · Pray. Take the steps you need.
+            </p>
           </section>
         </div>
       </div>
+      {!attempts.length && !projects.length && (
+        <section className="first-session">
+          <p className="eyebrow">BEGIN WITH ONE PASSAGE</p>
+          <h2>A small beginning.</h2>
+          <p>
+            Choose a passage, read it in context, then try recalling it. Begin
+            with one verse and build toward a complete thought.
+          </p>
+          <label>
+            Your first passage
+            <input
+              value={firstPassage}
+              onChange={(e) => setFirstPassage(e.target.value)}
+              placeholder="Psalms 119:11"
+            />
+          </label>
+          <button
+            onClick={() =>
+              void c.run(async () => {
+                const chosen = parseRefs(firstPassage, c.books);
+                await put("project", {
+                  name: firstPassage.trim(),
+                  refs: chosen,
+                  primary: true,
+                  kind: "passage",
+                });
+                c.startDaily(chosen, 5);
+              }, "Your first passage is ready.")
+            }
+          >
+            Begin a five-minute session
+          </button>
+        </section>
+      )}
       <div className="daily-plan">
         <div>
           <span className="eyebrow">RETURN & REMEMBER</span>
@@ -685,8 +747,8 @@ function Today(c: Ctx) {
         <div>
           <span className="eyebrow">ROOM FOR SOMETHING NEW</span>
           <h2>
-            {newMaterialAllowance(c.records, Date.now(), c.prefs.minutes)}{" "}
-            verses suggested
+            {newMaterialAllowance(c.records, Date.now(), sessionMinutes)} verses
+            suggested
           </h2>
           <p>Missed days carry forward. There is no streak to protect.</p>
           <button className="text-button" onClick={() => c.go("Memory")}>
@@ -734,6 +796,21 @@ function Today(c: Ctx) {
           </button>
         ))}
       </div>
+      <section className="device-status" aria-label="Device and backup status">
+        <div>
+          <strong>Saved on this device</strong>
+          <p>
+            No account or automatic sync. Browser storage can be cleared or
+            removed by your device. Keep an encrypted copy outside the app.
+          </p>
+          <small>
+            {c.prefs.lastBackup
+              ? `Last backup download requested: ${new Date(c.prefs.lastBackup).toLocaleDateString()}. Verify the saved file.`
+              : "No encrypted backup requested yet."}
+          </small>
+        </div>
+        <button onClick={() => c.go("Settings")}>Backup & transfer</button>
+      </section>
     </>
   );
 }
@@ -745,7 +822,9 @@ function Progress(c: Ctx) {
     due = dueQueue(reviews, Date.now()),
     projects = c.records.filter((e) => e.kind === "project"),
     primary = projects.find((e) => e.data.primary),
-    attempts = c.records.filter((e) => e.kind === "attempt"),
+    attempts = c.records
+      .filter((e) => e.kind === "attempt")
+      .filter((e) => e.data.evidence !== "self"),
     mastered = reviews.filter((r) => r.stage >= 3 && r.id.startsWith("verse:")),
     weak = [...reviews].sort((a, b) => a.accuracy - b.accuracy).slice(0, 5);
   const unitFor = (key: string) =>
@@ -768,15 +847,12 @@ function Progress(c: Ctx) {
         </section>
         <section>
           <strong>
-            {reviews.length
-              ? Math.round(
-                  reviews.reduce((s, r) => s + retention(r, Date.now()), 0) /
-                    reviews.length,
-                )
-              : "—"}
-            {reviews.length ? "%" : ""}
+            {
+              reviews.filter((r) => r.stage >= 4 && r.id.startsWith("verse:"))
+                .length
+            }
           </strong>
-          <span>Estimated retention</span>
+          <span>Established verses</span>
         </section>
         <section>
           <strong>
@@ -788,9 +864,33 @@ function Progress(c: Ctx) {
                 ) + "%"
               : "—"}
           </strong>
-          <span>Recitation accuracy</span>
+          <span>Typed recitation accuracy</span>
         </section>
       </div>
+      <details className="retention-explanation">
+        <summary>How lasting recall is measured</summary>
+        <p>
+          Later stages require successful, unassisted recalls at least a day
+          apart and when a review is due. Memorized requires at least four days
+          of evidence, Established at least two weeks, and Long-term retained at
+          least 45 days. Every stage remains in review.
+        </p>
+        <p>
+          Spoken reviews use your own assessment; typed reviews compare the KJV
+          words on this device. These describe recall, not spiritual maturity.
+        </p>
+        <p>
+          Estimated retention:{" "}
+          {reviews.length
+            ? Math.round(
+                reviews.reduce((sum, r) => sum + retention(r, Date.now()), 0) /
+                  reviews.length,
+              ) + "%"
+            : "No reviews yet"}
+          . This is an uncalibrated scheduling estimate, not a measured
+          probability of remembering.
+        </p>
+      </details>
       <div className="grid two">
         <section>
           <p className="eyebrow">YOUR MEMORY PROJECTS</p>
@@ -848,8 +948,13 @@ function Progress(c: Ctx) {
                 }
               }}
             >
-              {s.id.replace(/^(verse|chapter|passage):/, "")} ·{" "}
-              {stages[s.stage]} · {Math.round(s.accuracy * 100)}%
+              {unitFor(s.id)?.[0]
+                ? label(c.books, unitFor(s.id)![0])
+                : "Saved passage"}{" "}
+              · {stages[s.stage]} ·{" "}
+              {s.evidence === "self"
+                ? "Self-assessed"
+                : Math.round(s.accuracy * 100) + "% word accuracy"}
             </button>
           ))}
         </section>
@@ -907,6 +1012,9 @@ function Bible(c: Ctx) {
     [compare, setCompare] = useState(""),
     [focus, setFocus] = useState(false),
     [readerSize, setReaderSize] = useState(c.prefs.reading?.size ?? 24),
+    [readerLayout, setReaderLayout] = useState<"flow" | "verses">(
+      c.prefs.reading?.layout ?? "flow",
+    ),
     [importName, setImportName] = useState("RVR1960"),
     [rights, setRights] = useState(false),
     [readerStatus, setReaderStatus] = useState(""),
@@ -938,7 +1046,11 @@ function Bible(c: Ctx) {
     let active = true;
     setReaderStatus("Saving reading position…");
     void updatePreferences({
-      reading: { ref: `${book}:${chapter}:1`, size: readerSize },
+      reading: {
+        ref: `${book}:${chapter}:1`,
+        size: readerSize,
+        layout: readerLayout,
+      },
     })
       .then(() => {
         if (active) setReaderStatus("Reading position saved on this device.");
@@ -949,7 +1061,7 @@ function Bible(c: Ctx) {
     return () => {
       active = false;
     };
-  }, [book, chapter, readerSize]);
+  }, [book, chapter, readerSize, readerLayout]);
   const moveChapter = (direction: 1 | -1) => {
     const next = adjacentChapter(c.books, book, chapter, direction);
     if (!next) return;
@@ -961,7 +1073,10 @@ function Bible(c: Ctx) {
     window.scrollTo({ top: 0, behavior: "instant" });
   };
 
-  useEffect(() => setResultPage(0), [query, book, chapter, status]);
+  useEffect(() => {
+    setResultPage(0);
+    setSelected([]);
+  }, [query, book, chapter, status]);
   const translations = c.records.filter((e) => e.kind === "translation");
   let results: Ref[] = [],
     referenceSearch = false;
@@ -1021,139 +1136,125 @@ function Bible(c: Ctx) {
         </button>
       </div>
       <section className={"bible-surface" + (focus ? " focused-reader" : "")}>
-        <div className="controls reader-toolbar">
-          <label>
-            Book
-            <select
-              aria-label="Book"
-              value={book}
-              onChange={(e) => {
-                setBook(+e.target.value);
-                setChapter(1);
-              }}
-            >
-              {c.books.map((b) => (
-                <option key={b.id} value={b.id}>
-                  {b.name}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label>
-            Chapter
-            <select
-              aria-label="Chapter"
-              value={chapter}
-              onChange={(e) => setChapter(+e.target.value)}
-            >
-              {c.books[book - 1].chapters.map((_, i) => (
-                <option key={i} value={i + 1}>
-                  {i + 1}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label>
-            Search reference or words
+        <details className="reader-controls reader-navigation-tools">
+          <summary>Choose passage or search</summary>
+          <div className="controls reader-toolbar">
+            <label>
+              Book
+              <select
+                aria-label="Book"
+                value={book}
+                onChange={(e) => {
+                  setBook(+e.target.value);
+                  setChapter(1);
+                }}
+              >
+                {c.books.map((b) => (
+                  <option key={b.id} value={b.id}>
+                    {b.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Chapter
+              <select
+                aria-label="Chapter"
+                value={chapter}
+                onChange={(e) => setChapter(+e.target.value)}
+              >
+                {c.books[book - 1].chapters.map((_, i) => (
+                  <option key={i} value={i + 1}>
+                    {i + 1}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Search reference or words
+              <input
+                placeholder="John 3:16 or in the beginning"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+              />
+            </label>
+            <label>
+              Mastery
+              <select
+                aria-label="Mastery"
+                value={status}
+                onChange={(e) => setStatus(e.target.value)}
+              >
+                <option value="all">All verses</option>
+                <option value="new">New</option>
+                <option value="memorized">Memorized</option>
+              </select>
+            </label>
+          </div>
+        </details>
+        <details className="reader-controls reader-settings">
+          <summary>Reading settings</summary>
+          <p className="reader-status" role="status">
+            {readerStatus}
+          </p>
+          <div className="row reader-options">
+            <label>
+              Reading layout
+              <select
+                value={readerLayout}
+                onChange={(event) =>
+                  setReaderLayout(event.target.value as "flow" | "verses")
+                }
+              >
+                <option value="flow">Continuous reading</option>
+                <option value="verses">Verse by verse</option>
+              </select>
+            </label>
+            <label>
+              Compare translation
+              <select
+                aria-label="Compare translation"
+                value={compare}
+                onChange={(e) => setCompare(e.target.value)}
+              >
+                <option value="">KJV only</option>
+                {translations.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.data.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+          <label className="reader-size">
+            Scripture text size
             <input
-              placeholder="John 3:16 or in the beginning"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
+              type="range"
+              min="22"
+              max="38"
+              value={readerSize}
+              onChange={(e) => setReaderSize(+e.target.value)}
             />
           </label>
-          <label>
-            Mastery
-            <select
-              aria-label="Mastery"
-              value={status}
-              onChange={(e) => setStatus(e.target.value)}
-            >
-              <option value="all">All verses</option>
-              <option value="new">New</option>
-              <option value="memorized">Memorized</option>
-            </select>
-          </label>
-        </div>
-        <p className="reader-status" role="status">
-          {readerStatus}
-        </p>
-        <div className="row reader-options">
+          <p className="muted">
+            KJV is always your memorization target.{" "}
+            {query
+              ? `${results.length} matches; page ${resultPage + 1} of ${Math.max(1, Math.ceil(results.length / 200))}.`
+              : ""}
+          </p>
+        </details>
+        <div className="reader-quick-actions">
           <button onClick={() => setFocus(!focus)}>
             {focus ? "Leave quiet reader" : "Quiet reader"}
           </button>
-          <label>
-            Compare translation
-            <select
-              aria-label="Compare translation"
-              value={compare}
-              onChange={(e) => setCompare(e.target.value)}
-            >
-              <option value="">KJV only</option>
-              {translations.map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.data.name}
-                </option>
-              ))}
-            </select>
-          </label>
-        </div>
-        <label className="reader-size">
-          Scripture text size
-          <input
-            type="range"
-            min="22"
-            max="38"
-            value={readerSize}
-            onChange={(e) => setReaderSize(+e.target.value)}
-          />
-        </label>
-        <p className="muted">
-          KJV is always your memorization target.{" "}
-          {query
-            ? `${results.length} matches; page ${resultPage + 1} of ${Math.max(1, Math.ceil(results.length / 200))}.`
-            : ""}
-        </p>
-        {!focus && (
-          <div className="row">
+          {!focus && (
             <button
               onClick={() => setSelected(allRefs(c.books, book, chapter))}
             >
               Select chapter
             </button>
-            <button
-              onClick={() => {
-                c.select(selection);
-                c.go("Practice");
-              }}
-            >
-              Practice{" "}
-              {selected.length || (referenceSearch ? "passage" : "chapter")}{" "}
-              selected
-            </button>
-            <button disabled={!selected.length} onClick={() => setSelected([])}>
-              Clear selection
-            </button>
-            <button
-              onClick={() => {
-                setProjectName(
-                  label(c.books, selection[0]) +
-                    (selection.length > 1 ? " and following" : ""),
-                );
-                projectDialog.current?.showModal();
-              }}
-            >
-              Create memory project
-            </button>
-            <button
-              onClick={() => {
-                c.select(selection);
-                c.go("Meditation");
-              }}
-            >
-              Meditate on selection
-            </button>
-          </div>
-        )}
+          )}
+        </div>
         {search && results.length === 0 && (
           <div className="empty-state">
             <h2>No matching Scripture found.</h2>
@@ -1190,7 +1291,7 @@ function Bible(c: Ctx) {
             </button>
           </div>
         )}
-        {!!selected.length && !focus && (
+        {(!!selected.length || referenceSearch) && !focus && (
           <div
             className="selection-bar"
             role="region"
@@ -1198,40 +1299,67 @@ function Bible(c: Ctx) {
           >
             <div>
               <strong>
-                {selected.length} {selected.length === 1 ? "verse" : "verses"}{" "}
+                {selection.length} {selection.length === 1 ? "verse" : "verses"}{" "}
                 selected
               </strong>
               <small>
-                {label(c.books, selected[0])}
-                {selected.length > 1
-                  ? " + " + (selected.length - 1) + " more"
+                {label(c.books, selection[0])}
+                {selection.length > 1
+                  ? " + " + (selection.length - 1) + " more"
                   : ""}
               </small>
             </div>
             <button
               className="primary"
               onClick={() => {
-                c.select(selected);
-                c.go("Practice", true);
+                c.select(selection);
+                c.go("Practice");
               }}
             >
-              Practice selection
+              Practice {selected.length || "passage"} selected
             </button>
             <button
               onClick={() => {
-                c.select(selected);
+                setProjectName(
+                  label(c.books, selection[0]) +
+                    (selection.length > 1 ? " and following" : ""),
+                );
+                projectDialog.current?.showModal();
+              }}
+            >
+              Create memory project
+            </button>
+            <button
+              onClick={() => {
+                c.select(selection);
                 c.go("Meditation");
               }}
             >
-              Reflect
+              Meditate on selection
             </button>
             <button
-              aria-label="Clear selected passages"
-              onClick={() => setSelected([])}
+              onClick={() => {
+                setSelected([]);
+                if (referenceSearch) setQuery("");
+              }}
             >
-              Clear
+              Clear selection
             </button>
           </div>
+        )}
+        {referenceSearch && results.length > 0 && (
+          <button
+            className="context-link"
+            onClick={() => {
+              const [nextBook, nextChapter] = results[0].split(":").map(Number);
+              setBook(nextBook);
+              setChapter(nextChapter);
+              setQuery("");
+              setSelected([]);
+            }}
+          >
+            Read the whole chapter
+          </button>
         )}
         <div
           style={
@@ -1241,37 +1369,74 @@ function Bible(c: Ctx) {
           }
           className={focus ? "reader quiet" : "reader"}
         >
-          {results.slice(resultPage * 200, (resultPage + 1) * 200).map((r) => (
-            <article key={r} className={translation ? "comparison" : ""}>
-              <div>
-                {!focus && (
-                  <input
-                    type="checkbox"
-                    aria-label={`Select ${label(c.books, r)}`}
-                    checked={selected.includes(r)}
-                    onChange={(e) => {
-                      const next = e.target.checked
-                        ? [...selected, r]
-                        : selected.filter((v) => v !== r);
-                      setSelected(next);
-                      if (next.length) c.select(next);
-                    }}
-                  />
-                )}
-                <small>{label(c.books, r)} · KJV</small>
-                <p>{textFor(c.books, r)}</p>
-              </div>
-              {translation && (
+          {readerLayout === "flow" && !translation ? (
+            <p className="reading-paragraph">
+              {results
+                .slice(resultPage * 200, (resultPage + 1) * 200)
+                .map((ref) => (
+                  <React.Fragment key={ref}>
+                    <span
+                      className={
+                        "verse-inline" +
+                        (selected.includes(ref) ? " selected-verse" : "")
+                      }
+                    >
+                      <button
+                        className="verse-number"
+                        aria-label={`Select ${label(c.books, ref)}`}
+                        aria-pressed={selected.includes(ref)}
+                        onClick={() =>
+                          setSelected(
+                            selected.includes(ref)
+                              ? selected.filter((value) => value !== ref)
+                              : [...selected, ref],
+                          )
+                        }
+                      >
+                        <span aria-hidden="true">
+                          {search ? label(c.books, ref) : ref.split(":")[2]}
+                        </span>
+                      </button>{" "}
+                      <span className="verse-words">
+                        {textFor(c.books, ref)}
+                      </span>
+                    </span>{" "}
+                  </React.Fragment>
+                ))}
+            </p>
+          ) : (
+            results.slice(resultPage * 200, (resultPage + 1) * 200).map((r) => (
+              <article key={r} className={translation ? "comparison" : ""}>
                 <div>
-                  <small>{translation.name}</small>
-                  <p>
-                    {textFor(translation.books, r) ||
-                      "Not available in this package."}
-                  </p>
+                  {!focus && (
+                    <input
+                      type="checkbox"
+                      aria-label={`Select ${label(c.books, r)}`}
+                      checked={selected.includes(r)}
+                      onChange={(e) => {
+                        const next = e.target.checked
+                          ? [...selected, r]
+                          : selected.filter((v) => v !== r);
+                        setSelected(next);
+                        if (next.length) c.select(next);
+                      }}
+                    />
+                  )}
+                  <small>{label(c.books, r)} · KJV</small>
+                  <p>{textFor(c.books, r)}</p>
                 </div>
-              )}
-            </article>
-          ))}
+                {translation && (
+                  <div>
+                    <small>{translation.name}</small>
+                    <p>
+                      {textFor(translation.books, r) ||
+                        "Not available in this package."}
+                    </p>
+                  </div>
+                )}
+              </article>
+            ))
+          )}
         </div>
       </section>
       <dialog
@@ -1594,7 +1759,12 @@ function Practice(c: Ctx) {
     [refTest, setRefTest] = useState(""),
     [recorded, setRecorded] = useState(false),
     [showMeditation, setShowMeditation] = useState(false),
-    [studyVisible, setStudyVisible] = useState(true);
+    [studyVisible, setStudyVisible] = useState(true),
+    [recallMode, setRecallMode] = useState<"typed" | "spoken">("typed"),
+    [oralStarted, setOralStarted] = useState(false),
+    [oralRevealed, setOralRevealed] = useState(false),
+    [oralRating, setOralRating] = useState(""),
+    [oralOrder, setOralOrder] = useState(false);
   const draft = useLocalDraft("draft:practice:" + c.refs.join("|"), {
     scope: "practice",
     text: "",
@@ -1606,6 +1776,7 @@ function Practice(c: Ctx) {
     if (draft.ready && !draftLoaded.current) {
       draftLoaded.current = true;
       setTyped(draft.value.text);
+      setRecallMode(draft.value.recallMode ?? "typed");
       setRefTest(draft.value.reference ?? "");
       setHints(draft.value.hints ?? 0);
       if (draft.value.method && methods.includes(draft.value.method))
@@ -1674,10 +1845,24 @@ function Practice(c: Ctx) {
       .run(async () => {
         if (recorded)
           throw Error("This attempt is already saved. Start a fresh attempt.");
-        if (!result) throw Error("Compare your recall first.");
+        const assessment =
+          recallMode === "spoken" && oralRevealed && oralRating
+            ? {
+                accuracy: +oralRating,
+                verses: active.map((ref) => ({
+                  ref,
+                  accuracy: +oralRating,
+                  actual: "",
+                })),
+                transitionAccuracy: active.length === 1 || oralOrder ? 1 : 0,
+              }
+            : recallMode === "typed"
+              ? result
+              : undefined;
+        if (!assessment) throw Error("Compare or assess your recall first.");
         const at = Date.now();
-        const supplied = result.verses.map((v) => v.actual);
-        const transitionAccuracy = result.transitionAccuracy;
+        const supplied = assessment.verses.map((v) => v.actual);
+        const transitionAccuracy = assessment.transitionAccuracy;
         const saveUnit = async (
           unitId: string,
           refs: Ref[],
@@ -1689,6 +1874,7 @@ function Practice(c: Ctx) {
             unitId,
             at,
             accuracy,
+            evidence: recallMode === "spoken" ? "self" : "typed",
             hints:
               hints +
               (method !== "Type from memory" &&
@@ -1722,7 +1908,7 @@ function Practice(c: Ctx) {
             await saveUnit(
               "verse:" + active[i],
               [active[i]],
-              result.verses[i].accuracy,
+              assessment.verses[i].accuracy,
               "verse",
             );
           if (active.length > 1) {
@@ -1733,7 +1919,7 @@ function Practice(c: Ctx) {
             await saveUnit(
               unitId,
               active,
-              Math.min(result.accuracy, transitionAccuracy),
+              Math.min(assessment.accuracy, transitionAccuracy),
               "chapter" === unitId.split(":")[0] ? "chapter" : "passage",
             );
           }
@@ -1751,10 +1937,12 @@ function Practice(c: Ctx) {
                 await saveUnit(
                   "chapter:" + key,
                   group,
-                  grade(
-                    group.map((r) => textFor(c.books, r)).join("\n"),
-                    actual,
-                  ).accuracy,
+                  recallMode === "spoken"
+                    ? Math.min(assessment.accuracy, transitionAccuracy)
+                    : grade(
+                        group.map((r) => textFor(c.books, r)).join("\n"),
+                        actual,
+                      ).accuracy,
                   "chapter",
                 );
               }
@@ -1773,21 +1961,14 @@ function Practice(c: Ctx) {
   };
   if (finished)
     return (
-      <section className="session-complete">
-        <p className="eyebrow">A QUIET FINISH</p>
-        <h1>Enough for today.</h1>
-        <p>
-          You practiced {c.session!.items.length} passages. Your reviews are
-          saved and the next dates are scheduled.
-        </p>
-        <p>Return when you are ready. There is no streak to protect.</p>
-        <div className="row">
-          <button className="primary" onClick={() => c.go("Today")}>
-            Back to Today
-          </button>
-          <button onClick={() => c.go("Progress")}>View your progress</button>
-        </div>
-      </section>
+      <SessionFinish
+        books={c.books}
+        refs={c.session!.items.flatMap((entry) => entry.refs)}
+        count={c.session!.items.length}
+        onDone={() => c.go("Today")}
+        onProgress={() => c.go("Progress")}
+        run={c.run}
+      />
     );
   return (
     <>
@@ -1969,7 +2150,7 @@ function Practice(c: Ctx) {
             />
           </label>
         )}
-        {method === "Chapter Code" && (
+        {method === "Chapter Code" && studyVisible && (
           <>
             <p>
               Walk your locations in verse order. Associations are cues, never
@@ -1996,44 +2177,70 @@ function Practice(c: Ctx) {
               ))}
           </>
         )}
+        <p className="method-guidance">
+          {item?.reason === "review" || c.recallOnly
+            ? "Recommended: try independent recall first. Cues remain available when you need them."
+            : "Recommended: read and repeat, then hide the words when you are ready."}
+        </p>
+        {!oralRevealed && (
+          <ContextPassage
+            books={c.books}
+            refs={active}
+            onRead={() => {
+              if (recorded) return;
+              setHints(hints + 1);
+              draft.update({ hints: hints + 1 });
+            }}
+          />
+        )}
         <div className="scripture">
-          {active.slice(0, 200).map((r, i) => {
-            const words = textFor(c.books, r).split(/\s+/);
-            return (
-              <p key={r}>
-                <sup>{label(c.books, r)}</sup>{" "}
-                {!studyVisible
-                  ? "Recall this verse from memory."
-                  : method === "Type from memory"
-                    ? hints >= 3
-                      ? textFor(c.books, r)
-                      : hints === 2
+          {!studyVisible ? (
+            <p className="recall-invitation">
+              Recall{" "}
+              {active.length === 1
+                ? "this verse"
+                : `these ${active.length} verses`}{" "}
+              from memory.
+            </p>
+          ) : (
+            active.slice(0, 200).map((r, i) => {
+              const words = textFor(c.books, r).split(/\s+/);
+              return (
+                <p key={r}>
+                  <sup>{label(c.books, r)}</sup>{" "}
+                  {!studyVisible
+                    ? "Recall this verse from memory."
+                    : method === "Type from memory"
+                      ? hints >= 3
+                        ? textFor(c.books, r)
+                        : hints === 2
+                          ? words.map((w) => w[0]).join(" ")
+                          : hints === 1
+                            ? words.slice(0, 3).join(" ") + " …"
+                            : "Recall from memory."
+                      : method === "First-letter method"
                         ? words.map((w) => w[0]).join(" ")
-                        : hints === 1
-                          ? words.slice(0, 3).join(" ") + " …"
-                          : "Recall from memory."
-                    : method === "First-letter method"
-                      ? words.map((w) => w[0]).join(" ")
-                      : method === "Progressive word hiding"
-                        ? words.map((w, j) => (
-                            <span key={j}>
-                              {(j * 37 + i * 13) % 100 < hide ? (
-                                <span
-                                  className="hiddenword"
-                                  role="img"
-                                  aria-label="hidden word"
-                                >
-                                  {"_".repeat(Math.min(w.length, 9))}
-                                </span>
-                              ) : (
-                                w
-                              )}{" "}
-                            </span>
-                          ))
-                        : textFor(c.books, r)}
-              </p>
-            );
-          })}
+                        : method === "Progressive word hiding"
+                          ? words.map((w, j) => (
+                              <span key={j}>
+                                {(j * 37 + i * 13) % 100 < hide ? (
+                                  <span
+                                    className="hiddenword"
+                                    role="img"
+                                    aria-label="hidden word"
+                                  >
+                                    {"_".repeat(Math.min(w.length, 9))}
+                                  </span>
+                                ) : (
+                                  w
+                                )}{" "}
+                              </span>
+                            ))
+                          : textFor(c.books, r)}
+                </p>
+              );
+            })
+          )}
         </div>
         {active.length > 200 && (
           <p>
@@ -2064,27 +2271,32 @@ function Practice(c: Ctx) {
           >
             Progressive hint ({hints})
           </button>
-          <button
-            onClick={() => {
-              if (
-                typed.trim() &&
-                !window.confirm("Clear this attempt and its saved draft?")
-              )
-                return;
-              setTyped("");
-              draft.update({ text: "", hints: 0, reference: "" });
-              setRefTest("");
-              setResult(undefined);
-              setHints(0);
-              setRecorded(false);
-            }}
-          >
-            Fresh attempt
-          </button>
-          <button onClick={() => setShowMeditation(!showMeditation)}>
-            Pause to meditate
-          </button>
         </div>
+        <details className="practice-extra-tools">
+          <summary>More practice options</summary>
+          <div className="row">
+            <button
+              onClick={() => {
+                if (
+                  typed.trim() &&
+                  !window.confirm("Clear this attempt and its saved draft?")
+                )
+                  return;
+                setTyped("");
+                draft.update({ text: "", hints: 0, reference: "" });
+                setRefTest("");
+                setResult(undefined);
+                setHints(0);
+                setRecorded(false);
+              }}
+            >
+              Fresh attempt
+            </button>
+            <button onClick={() => setShowMeditation(!showMeditation)}>
+              Pause to meditate
+            </button>
+          </div>
+        </details>
         {hints > 0 && (
           <p className="hint">
             {hints === 1
@@ -2111,59 +2323,180 @@ function Practice(c: Ctx) {
             </button>
           </>
         )}
-        <label>
-          Type or transcribe your recall (line breaks are optional)
-          <textarea
-            className="recall"
-            value={typed}
-            maxLength={200000}
-            disabled={!draft.ready || saving}
-            onChange={(e) => {
-              setTyped(e.target.value);
-              draft.update({
-                text: e.target.value,
-                method,
-                hints,
-                reference: refTest,
-                studyVisible,
-                hiding: hide,
-                step,
-                section,
-              });
-              setResult(undefined);
-              setRecorded(false);
+        <div className="recall-mode" role="group" aria-label="How to recall">
+          <button
+            aria-pressed={recallMode === "typed"}
+            disabled={saving || recorded}
+            onClick={() => {
+              setRecallMode("typed");
+              draft.update({ recallMode: "typed" });
             }}
-            placeholder="Let the words come to mind…"
-            spellCheck={false}
-            autoCapitalize="off"
-          />
-        </label>
-        <label>
-          Reference recall (first verse, e.g. Psalms 119:11)
-          <input
-            value={refTest}
-            onChange={(e) => {
-              setRefTest(e.target.value);
-              draft.update({ reference: e.target.value });
+          >
+            Type from memory
+          </button>
+          <button
+            aria-pressed={recallMode === "spoken"}
+            disabled={saving || recorded}
+            onClick={() => {
+              setRecallMode("spoken");
+              setOralStarted(false);
+              setOralRevealed(false);
+              setOralRating("");
+              draft.update({ recallMode: "spoken" });
             }}
-          />
-        </label>
-        {refTest && (
-          <p>
-            {refTest.trim().toLowerCase() ===
-            label(c.books, active[0]).toLowerCase()
-              ? "Reference correct."
-              : "Check the book, chapter and verse shown above."}
-          </p>
+          >
+            Recite aloud
+          </button>
+        </div>
+        {recallMode === "typed" && (
+          <>
+            <label>
+              Type or transcribe your recall (line breaks are optional)
+              <textarea
+                className="recall"
+                value={typed}
+                maxLength={200000}
+                disabled={!draft.ready || saving}
+                onChange={(e) => {
+                  setTyped(e.target.value);
+                  draft.update({
+                    text: e.target.value,
+                    method,
+                    hints,
+                    reference: refTest,
+                    studyVisible,
+                    hiding: hide,
+                    step,
+                    section,
+                  });
+                  setResult(undefined);
+                  setRecorded(false);
+                }}
+                placeholder="Let the words come to mind…"
+                spellCheck={false}
+                autoCapitalize="off"
+              />
+            </label>
+            <details className="reference-quiz">
+              <summary>Also practice the reference</summary>
+              <label>
+                Reference recall (first verse, e.g. Psalms 119:11)
+                <input
+                  value={refTest}
+                  onChange={(e) => {
+                    setRefTest(e.target.value);
+                    draft.update({ reference: e.target.value });
+                  }}
+                />
+              </label>
+              {refTest && (
+                <p>
+                  {refTest.trim().toLowerCase() ===
+                  label(c.books, active[0]).toLowerCase()
+                    ? "Reference correct."
+                    : "Check the book, chapter and verse shown above."}
+                </p>
+              )}
+            </details>
+            <button
+              className="primary"
+              disabled={recorded || !draft.ready || !typed.trim() || saving}
+              onClick={check}
+            >
+              Compare recall
+            </button>
+          </>
         )}
-        <button
-          className="primary"
-          disabled={recorded || !draft.ready || !typed.trim() || saving}
-          onClick={check}
-        >
-          Compare recall
-        </button>
-        {result && (
+        {recallMode === "spoken" && (
+          <div className="spoken-recall">
+            <h2>Recall in your own voice.</h2>
+            <p>
+              No microphone or recording. After reciting, reveal the KJV passage
+              and assess your recall. The review is saved as self-assessed.
+            </p>
+            {!oralStarted && (
+              <button
+                className="primary"
+                disabled={!draft.ready || saving || recorded}
+                onClick={() => {
+                  setOralStarted(true);
+                  setOralOrder(false);
+                  setStudyVisible(false);
+                  setResult(undefined);
+                  draft.update({ studyVisible: false });
+                }}
+              >
+                Begin spoken recall
+              </button>
+            )}
+            {oralStarted && !oralRevealed && (
+              <button className="primary" onClick={() => setOralRevealed(true)}>
+                Reveal & assess my recall
+              </button>
+            )}
+            {oralRevealed && (
+              <>
+                <blockquote className="spoken-comparison">
+                  {active.map((ref) => (
+                    <p key={ref}>
+                      <small>{label(c.books, ref)} · KJV</small>
+                      {textFor(c.books, ref)}
+                    </p>
+                  ))}
+                </blockquote>
+                <label>
+                  Spoken recall assessment
+                  <select
+                    disabled={recorded || saving}
+                    value={oralRating}
+                    onChange={(event) => {
+                      setOralRating(event.target.value);
+                      setSelf(
+                        +event.target.value === 1
+                          ? 3
+                          : +event.target.value >= 0.8
+                            ? 2
+                            : 1,
+                      );
+                    }}
+                  >
+                    <option value="">Choose after comparing</option>
+                    <option value="1">Every word recalled</option>
+                    <option value="0.85">Some words needed care</option>
+                    <option value="0.5">I needed more support</option>
+                  </select>
+                </label>
+                {active.length > 1 && (
+                  <label>
+                    <input
+                      type="checkbox"
+                      disabled={recorded || saving}
+                      checked={oralOrder}
+                      onChange={(event) => setOralOrder(event.target.checked)}
+                    />
+                    I recalled the verses and transitions in order.
+                  </label>
+                )}
+                <p className="muted">
+                  This is your own assessment; word accuracy has not been
+                  checked automatically. Approximate scores support scheduling
+                  only.
+                </p>
+                <button
+                  disabled={!oralRating || recorded || saving}
+                  onClick={save}
+                >
+                  {recorded
+                    ? "Review recorded"
+                    : saving
+                      ? "Saving review…"
+                      : "Save self-assessed review"}
+                </button>
+              </>
+            )}
+          </div>
+        )}
+        {recallMode === "typed" && result && (
           <div aria-live="polite">
             <h2>{Math.round(result.accuracy * 100)}% word accuracy</h2>
             <details>
@@ -2269,7 +2602,7 @@ function Practice(c: Ctx) {
         )}
         {recorded && (
           <div className="review-saved">
-            <h3>Kept for the long term.</h3>
+            <h3>A step toward lasting recall.</h3>
             <p>
               {c.records
                 .filter((e) => e.kind === "review")
@@ -2531,6 +2864,7 @@ function Meditation(c: Ctx) {
       <Heading eyebrow="BE STILL WITH THE WORD" title="Meditate & apply" />
       <section>
         <Passage ctx={c} refs={c.refs.slice(0, 10)} />
+        <ContextPassage books={c.books} refs={c.refs} />
         <details>
           <summary>Seven optional invitations</summary>
           {prompts.map((p) => (
@@ -3220,6 +3554,35 @@ function Settings(c: Ctx) {
       </section>
       <section>
         <h2>Encrypted backup & transfer</h2>
+        <details className="transfer-guide">
+          <summary>Move my data to another device</summary>
+          <ol>
+            <li>
+              On this device, set and confirm a backup password, then export an
+              encrypted backup.
+            </li>
+            <li>
+              Verify the .wwbackup file was saved in Files or Downloads. Keep
+              the password separately; it cannot be recovered.
+            </li>
+            <li>
+              Send the encrypted file to your other device using AirDrop or a
+              location you choose.
+            </li>
+            <li>
+              Open the updated app on that device, enter the same password, and
+              open the file for preview.
+            </li>
+            <li>
+              Review the contents and restore mode, confirm restoration, then
+              check your projects and reflections.
+            </li>
+          </ol>
+          <p>
+            Each device keeps its own copy. Later edits stay on the device where
+            you make them until you transfer another backup.
+          </p>
+        </details>
         <p>
           Last export requested:{" "}
           {c.prefs.lastBackup
@@ -3372,6 +3735,7 @@ function Settings(c: Ctx) {
                         !(await db.records.get(record.id))
                       )
                         await db.records.put(record);
+                    await reconcileReviews();
                   });
                   setPreview(undefined);
                 }, "Backup restored. Stable identifiers prevent duplicate review attempts.")

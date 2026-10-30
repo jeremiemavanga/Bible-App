@@ -214,6 +214,7 @@ test("whole chapter recitation persists independent verse/chapter reviews, trans
     .fill(
       "O praise the LORD, all ye nations: praise him, all ye people.\nFor his merciful kindness is great toward us: and the truth of the LORD endureth for ever. Praise ye the LORD.",
     );
+  await page.locator(".reference-quiz > summary").click();
   await page.getByLabel("Reference recall").fill("Psalms 117:1");
   await page.getByRole("button", { name: "Compare recall" }).click();
   await expect(
@@ -335,7 +336,11 @@ test("authorized comparison packages never change the KJV memory target", async 
       .first(),
   ).toBeVisible();
   await page
-    .getByRole("button", { name: "Practice chapter selected", exact: true })
+    .getByRole("button", { name: "Select chapter", exact: true })
+    .click();
+  await page
+    .getByRole("region", { name: "Selected passage actions" })
+    .getByRole("button", { name: /^Practice/ })
     .click();
   await page.getByLabel("Memorization method").selectOption("Type from memory");
   await page

@@ -1910,3 +1910,379 @@ button svg.lucide {
     padding: 24px;
   }
 }
+/* Scripture-led reading and a quieter daily rhythm. */
+.today-layout {
+  grid-template-columns: minmax(0, 1fr) minmax(180px, 0.4fr);
+  gap: 40px;
+  align-items: start;
+}
+.today-reading {
+  order: 0;
+  padding-top: 0;
+}
+.date-panel {
+  order: 1;
+  display: block;
+  padding-top: 8px;
+}
+.date-poster {
+  grid-template-columns: auto 1fr;
+  gap: 4px 16px;
+  padding: 0;
+  margin: 0 0 20px;
+}
+.poster-day {
+  grid-column: 1;
+  grid-row: 1/4;
+  font-size: 5rem;
+  margin: 0;
+  align-self: center;
+}
+.poster-month {
+  grid-column: 2;
+  grid-row: 1;
+  font-size: 0.875rem;
+  align-self: end;
+}
+.poster-weekday {
+  grid-column: 2;
+  grid-row: 2;
+  font-size: 0.875rem;
+  text-align: left;
+  margin: 0;
+}
+.poster-year {
+  grid-column: 2;
+  grid-row: 3;
+  font-size: 0.875rem;
+  margin: 0;
+}
+.home-calendar {
+  font-size: 0.75rem;
+}
+.home-calendar > summary {
+  padding: 12px 0;
+}
+.home-calendar .month-calendar {
+  margin-top: 12px;
+}
+.hero blockquote {
+  font-size: clamp(1.5rem, 3vw, 2rem);
+  line-height: 1.7;
+}
+.hero .session-length {
+  max-width: 300px;
+  font-size: 0.75rem;
+  margin-top: 20px;
+}
+.rhythm-caption,
+.method-guidance {
+  font-size: 0.8125rem;
+  color: var(--text-secondary);
+}
+.first-session,
+.device-status {
+  max-width: 1000px;
+  margin: 24px auto;
+}
+.first-session {
+  padding: 24px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+.first-session > label {
+  max-width: 440px;
+}
+.first-session > p,
+.device-status p {
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+}
+.device-status {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+}
+.device-status p {
+  margin: 4px 0;
+}
+.device-status small {
+  display: block;
+}
+.reader-controls {
+  padding: 0;
+  border-bottom: 1px solid var(--border);
+}
+.reader-controls > summary {
+  padding: 12px 4px;
+  font-size: 0.8125rem;
+}
+.reader-controls[open] {
+  padding-bottom: 16px;
+}
+.reader-controls .reader-toolbar {
+  margin: 16px 0;
+}
+.reader-quick-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 12px;
+}
+.reader-quick-actions button,
+.context-link {
+  font-size: 0.75rem;
+  border: 0;
+}
+.focused-reader .reader-controls {
+  display: none;
+}
+.reading-paragraph {
+  text-wrap: pretty;
+}
+.verse-number {
+  display: inline-flex;
+  vertical-align: baseline;
+  min-width: 44px;
+  min-height: 44px;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  padding: 6px;
+  border: 0;
+  border-radius: 6px;
+  color: var(--text-secondary);
+  transform: none;
+}
+.verse-number[aria-pressed="true"] {
+  background: var(--text-primary);
+  color: var(--bg);
+}
+.selected-verse .verse-words {
+  text-decoration: underline;
+  text-decoration-color: var(--accent-gold);
+  text-underline-offset: 0.2em;
+}
+.reader .reading-paragraph .verse-inline {
+  display: inline;
+}
+.reader.quiet .verse-number {
+  color: var(--text-muted);
+}
+.scripture-context {
+  margin: 20px 0;
+  border-block: 1px solid var(--border);
+}
+.scripture-context > summary {
+  padding: 14px 4px;
+  font-size: 0.875rem;
+}
+.context-invitation {
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+}
+.context-reading {
+  max-height: 420px;
+  overflow-y: auto;
+  padding: 0 16px;
+  margin-bottom: 16px;
+  overscroll-behavior: contain;
+}
+.context-reading p {
+  font-size: 1.125rem;
+  line-height: 1.9;
+}
+.context-reading sup {
+  font-size: 0.6875rem;
+  color: var(--text-secondary);
+}
+.context-target {
+  background: var(--surface-elevated);
+  border-bottom: 2px solid var(--accent-gold);
+}
+.recall-invitation {
+  font-size: 1.125rem;
+  color: var(--text-secondary);
+}
+.recall-mode {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin: 24px 0;
+}
+.recall-mode button[aria-pressed="true"] {
+  background: var(--text-primary);
+  color: var(--bg);
+  border-color: var(--text-primary);
+}
+.practice-phases button[aria-pressed="true"] {
+  color: var(--bg);
+}
+.spoken-recall {
+  margin: 24px 0;
+}
+.spoken-recall > p {
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+}
+.spoken-comparison,
+.session-complete blockquote {
+  margin: 24px 0;
+  padding: 20px 24px;
+  border-left: 2px solid var(--accent-gold);
+  background: var(--surface);
+  font-size: 1.25rem;
+  line-height: 1.8;
+}
+.spoken-comparison small,
+.session-complete blockquote small {
+  display: block;
+  margin-bottom: 8px;
+  font-size: 0.6875rem;
+}
+.spoken-comparison p {
+  margin: 0 0 16px;
+}
+.daily-rhythm {
+  display: flex;
+  gap: 8px 20px;
+  flex-wrap: wrap;
+  list-style: none;
+  padding: 0;
+  margin: 24px 0;
+  font-size: 0.8125rem;
+  color: var(--text-secondary);
+}
+.daily-rhythm li {
+  padding: 8px 0;
+  border-bottom: 2px solid transparent;
+}
+.daily-rhythm [aria-current="step"] {
+  border-bottom-color: var(--accent-gold);
+  color: var(--text-primary);
+  font-weight: 600;
+}
+.retention-explanation {
+  margin-bottom: 32px;
+}
+.retention-explanation p,
+.transfer-guide {
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+}
+.transfer-guide li {
+  margin-bottom: 12px;
+}
+@media (max-width: 1100px) {
+  .today-layout {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+  }
+  .date-panel {
+    order: 0;
+    width: 100%;
+  }
+  .today-reading {
+    order: 1;
+    width: 100%;
+  }
+  .date-poster {
+    grid-template-columns: auto 1fr auto;
+    max-width: 340px;
+  }
+  .poster-day {
+    font-size: 4rem;
+  }
+  .home-calendar {
+    max-width: 340px;
+  }
+}
+@media (max-width: 700px) {
+  .today-layout {
+    margin-bottom: 24px;
+  }
+  .device-status {
+    display: block;
+  }
+  .device-status > button {
+    margin-top: 16px;
+  }
+  .first-session {
+    padding: 20px;
+  }
+  .reader {
+    margin-top: 20px;
+  }
+  .context-reading {
+    padding: 0 8px;
+    max-height: 340px;
+  }
+  .selection-bar {
+    position: static;
+  }
+  .session-complete {
+    margin-top: 16px;
+  }
+}
+/* Keep the passage and primary action within the first phone screen. */
+.home-calendar {
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.reader-controls {
+  margin: 0;
+  border-top: 0;
+}
+.reader-controls + .reader-controls {
+  margin-top: 0;
+}
+.today-reading .heading {
+  margin: 0 0 16px;
+}
+.today-reading .heading > .eyebrow {
+  display: none;
+}
+.hero {
+  padding: 16px 0;
+}
+.hero h2 {
+  margin-top: 16px;
+}
+.hero blockquote {
+  margin: 16px 0 20px;
+}
+.hero .practice-action {
+  margin-top: 16px;
+}
+@media (max-width: 1100px) {
+  .today-reading {
+    order: 0;
+  }
+  .date-panel {
+    order: 1;
+  }
+}
+@media (max-width: 700px) {
+  .heading:has(+ .chapter-navigation) {
+    margin-bottom: 20px;
+  }
+  .heading:has(+ .chapter-navigation) h1 {
+    font-size: 1.625rem;
+  }
+  .chapter-navigation {
+    margin-bottom: 12px;
+    padding-block: 12px;
+  }
+  .today-reading .heading h1 {
+    font-size: 1.75rem;
+  }
+  .date-panel {
+    padding-top: 0;
+  }
+  .date-poster {
+    margin-bottom: 8px;
+  }
+}
