@@ -1,3 +1,4 @@
+import { isStoredMedia } from "./media";
 import { verseCounts } from "./canon";
 import type { Entry, Kind, Translation } from "./domain";
 const isString = (v: unknown) => typeof v === "string" && v.length <= 200000;
@@ -45,15 +46,30 @@ export function validateEntry(e: Entry) {
   const texts = (keys: string[]) => keys.every((k) => isString(d[k]));
   const numbers = (keys: string[]) => keys.every((k) => number(d[k]));
   const blob = (media: "image/" | "audio/") =>
-    d.blob instanceof Blob
-      ? d.blob.type.startsWith(media) && d.blob.size <= 100000000
-      : d.blob?.__blob === true &&
-        typeof d.blob.type === "string" &&
-        d.blob.type.startsWith(media) &&
-        typeof d.blob.base64 === "string" &&
-        d.blob.base64.length < 140000000 &&
-        /^[A-Za-z0-9+/]*={0,2}$/.test(d.blob.base64);
+    isStoredMedia(d.blob)
+      ? d.blob.type.startsWith(media) && d.blob.bytes.byteLength <= 100000000
+      : d.blob instanceof Blob
+        ? d.blob.type.startsWith(media) && d.blob.size <= 100000000
+        : d.blob?.__blob === true &&
+          typeof d.blob.type === "string" &&
+          d.blob.type.startsWith(media) &&
+          typeof d.blob.base64 === "string" &&
+          d.blob.base64.length < 140000000 &&
+          /^[A-Za-z0-9+/]*={0,2}$/.test(d.blob.base64);
   const check: Record<Kind, () => boolean> = {
+    draft: () =>
+      ["practice", "reflection"].includes(d.scope) &&
+      texts(["text"]) &&
+      numbers(["updated"]) &&
+      refs(d.refs) &&
+      (d.method === undefined || isString(d.method)) &&
+      (d.reference === undefined || isString(d.reference)) &&
+      (d.hints === undefined || number(d.hints)) &&
+      (d.studyVisible === undefined || typeof d.studyVisible === "boolean") &&
+      (d.hiding === undefined || number(d.hiding, 0, 100)) &&
+      (d.step === undefined ||
+        (Number.isInteger(d.step) && number(d.step, 1, 31102))) &&
+      (d.section === undefined || isString(d.section)),
     project: () =>
       texts(["name"]) &&
       refs(d.refs) &&
@@ -102,7 +118,9 @@ export function validateEntry(e: Entry) {
       ) &&
       typeof d.prompts === "boolean" &&
       typeof d.saturday === "boolean" &&
-      (d.lastBackup === undefined || number(d.lastBackup)),
+      (d.lastBackup === undefined || number(d.lastBackup)) &&
+      (!d.reading ||
+        (validRef(d.reading.ref) && number(d.reading.size, 22, 38))),
     translation: () => validTranslation(d),
   };
   if (!check[e.kind]())

@@ -2,6 +2,10 @@
 
 A private, offline-first Scripture memorization PWA built against the approved eight-stage specification. React + TypeScript + Vite, Dexie/IndexedDB, a precaching service worker, Web Crypto encrypted exports, and Vitest/Playwright checks. No accounts or automatic sync. The interface follows the [latest paper-and-ink visual reference](docs/PAPER-VISUAL-DIRECTION.md), superseding the earlier dark palette.
 
+## Latest improvements
+
+Read [the learning and reading update](docs/LEARNING-UPDATE.md): guided daily sessions, accurate paragraph/whole-chapter grading, local draft recovery, chapter navigation and saved reading size, reference aliases, project creation from the reader, and portable media storage addressing the reported WebKit failure. New encrypted exports include drafts; version 1 backups remain importable.
+
 ## Develop and verify
 
 Requires Node.js 22.12+ (validated here with Node 24) and npm.

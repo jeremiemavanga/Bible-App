@@ -2,7 +2,18 @@
 
 Validated in the cloud workspace on October 29, 2026. The app is implemented and the local development/production workflows run. This is **not** a claim of physical Apple-device certification, a deployed website, or cleared distribution of third-party translations.
 
-## Current paper-and-ink revision
+## Current learning and reading update
+
+Local verification passed: **28 unit/domain/backup checks and 42 browser scenarios** on desktop, iPhone-size and iPad-size Chromium. The targeted 18-scenario improvements subset was rerun after the final save/reader safeguards. Production build and YAML formatting validation pass. Native WebKit remains pending GitHub Actions because its browser download is denied in this cloud instance. Pages deployment now calls full verification and will not publish until it passes.
+
+
+Guided reviews-first daily sessions, bounded new material, per-verse word alignment independent of line breaks, actual hiding/reveal tracking, draft recovery, resumed chapter/text size, faster alias-aware reference search, and contextual passage-to-project/reflection actions are implemented. The phone home now surfaces Scripture before the calendar. See `LEARNING-UPDATE.md`.
+
+The user-supplied GitHub snapshots confirmed native WebKit Blob/File preparation failures for both media imports. New storage and restores use typed bytes; existing Blob records remain readable. Original image/audio assertions are retained and an additional simulated storage-restriction regression covers media import, encrypted export and clean restoration. Local native WebKit remains unrun because download domains are denied; GitHub Actions must verify it.
+
+Backup version 2 includes drafts and portable media, retains the same authenticated encryption/KDF strengths, and the app continues to import version 1. Existing local data is preserved; update other devices before transferring new-format backups.
+
+## Previous paper-and-ink revision
 
 The October 30 image reference supersedes the earlier forest/sage palette. Added a warm paper-and-ink system, oversized live local date, orange-today circular full-month calendar, and matching typography, controls and installation icons. Only actual review attempts mark practiced days. Five destinations, local records and all functional workflows are preserved. Calendar accessibility uses semantic labels instead of color-only status. Validation: 19 unit checks and 24 browser checks passed across desktop, phone and tablet Chromium layouts, including leap-year month layout and real-history-only markers. Accessibility and 160% text checks pass across all screens; physical Apple/Safari validation is still outstanding. The production build passes. See `PAPER-VISUAL-DIRECTION.md`.
 

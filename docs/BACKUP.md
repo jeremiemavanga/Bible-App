@@ -1,3 +1,9 @@
+# Current format: version 2
+
+New exports include local drafts and portable media. The envelope and decrypted manifest use `version: 2` and AES-GCM additional authenticated data `word-within:2`; all other encryption parameters remain as below. The current app still imports version 1 with its exact original `word-within:1` authenticated data. Update receiving devices before importing a version 2 backup. Decrypted media is stored as typed bytes in IndexedDB and converted to Blob URLs only for playback/display, avoiding WebKit file-backed Blob storage failures. See [LEARNING-UPDATE.md](LEARNING-UPDATE.md) for compatibility details.
+
+The following section documents the original format, which remains importable.
+
 # Backup format v1
 
 `.wwbackup` is a UTF-8 JSON envelope with `format: word-within-encrypted`, `version: 1`, `kdf: PBKDF2-SHA256`, `iterations: 600000`, a fresh random 16-byte base64 salt, a fresh random 12-byte base64 IV, and base64 AES-256-GCM ciphertext including its authentication tag. Additional authenticated data is the literal UTF-8 `word-within:1`. Web Crypto performs derivation and authenticated encryption. Each export derives a fresh key from the supplied password and salt. A minimum of 12 characters is enforced; use a unique, strong passphrase.

@@ -8,7 +8,7 @@ The manual workflow `.github/workflows/deploy-pages.yml` builds the app at `/Bib
 2. Open **Settings → Pages**. Under **Build and deployment**, set **Source** to **GitHub Actions**. Do not select a branch or a `/docs` folder. If Pages is unavailable, GitHub may require a different account plan for a private repository. Do not change repository visibility merely to bypass this; check your preferred hosting option first.
 3. Open **Actions**. Enable workflows if GitHub asks. In the sidebar choose **Deploy app to GitHub Pages**.
 4. Click **Run workflow**, select **main**, then confirm **Run workflow**.
-5. Open the new run. Wait until **build** and **deploy** are green. An approval may appear if your repository has a protected `github-pages` environment; an authorized repository owner must approve it.
+5. Open the new run. Wait until **verify**, **build** and **deploy** are green. Verification includes native WebKit and must pass before publication. An approval may appear if your repository has a protected `github-pages` environment; an authorized repository owner must approve it.
 6. Open the URL shown in the deploy job/environment. For this repository's default Pages configuration it is https://jeremiemavanga.github.io/Bible-App/ . This address is expected, not proof of publication before the workflow succeeds. A custom domain, if configured, can change the address.
 7. Open the site in Safari, wait for **Offline ready**, then install as described in `APPLE-INSTALL.md`. The very first load on each installed browser context requires connectivity.
 

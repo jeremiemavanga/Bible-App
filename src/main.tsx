@@ -1,4 +1,11 @@
-import React, { useState, useEffect, useRef } from "react";
+import { packMedia, mediaBlob } from "./media";
+import React, {
+  useState,
+  useEffect,
+  useRef,
+  useMemo,
+  useDeferredValue,
+} from "react";
 import { createRoot } from "react-dom/client";
 import { createPortal } from "react-dom";
 import {
@@ -16,7 +23,7 @@ import {
   ChevronRight,
 } from "lucide-react";
 import { registerSW } from "virtual:pwa-register";
-import { db, put, loadBible, download } from "./db";
+import { db, put, loadBible, download, updatePreferences } from "./db";
 import { encrypt, decrypt } from "./backup";
 import {
   type BibleBook,
@@ -43,6 +50,14 @@ import {
   curatedCrossReferences,
   id,
 } from "./domain";
+import {
+  gradePassage,
+  dailyQueue,
+  newMaterialAllowance,
+  adjacentChapter,
+  type PracticeItem,
+} from "./learning";
+import { useLocalDraft } from "./drafts";
 import { validTranslation } from "./validation";
 import "./style.css";
 const updateSW = registerSW({
@@ -77,6 +92,9 @@ interface Ctx {
   recallOnly: boolean;
   run: (fn: () => Promise<unknown>, message?: string) => Promise<void>;
   prefs: NotificationPreference;
+  session: { items: PracticeItem[]; position: number } | null;
+  startDaily: (refs?: Ref[]) => void;
+  nextPractice: () => void;
 }
 function App() {
   const [books, setBooks] = useState<BibleBook[]>([]),
@@ -89,7 +107,8 @@ function App() {
     [offline, setOffline] = useState(!navigator.onLine),
     [ready, setReady] = useState(false),
     [update, setUpdate] = useState(false),
-    [sidebarOpen, setSidebarOpen] = useState(false);
+    [sidebarOpen, setSidebarOpen] = useState(false),
+    [session, setSession] = useState<Ctx["session"]>(null);
   const refresh = async () => setRecords(await db.records.toArray());
   const run = async (
     fn: () => Promise<unknown>,
@@ -106,8 +125,9 @@ function App() {
   };
   useEffect(() => {
     void run(async () => {
-      setBooks(await loadBible());
+      const loaded = await loadBible();
       await refresh();
+      setBooks(loaded);
     }, "");
     const on = () => setOffline(!navigator.onLine),
       upd = () => setUpdate(true);
@@ -168,12 +188,20 @@ function App() {
     }, 30000);
     return () => clearInterval(timer);
   }, [prefs]);
+  useEffect(() => {
+    void refresh().catch(() =>
+      setError(
+        "Could not read local changes. Reload and check your browser storage.",
+      ),
+    );
+  }, [page]);
   const ctx: Ctx = {
     books,
     records,
     refs,
     select: setRefs,
     go: (p, recall = false) => {
+      if (p === "Practice") setSession(null);
       setRecallOnly(recall);
       setPage(p);
       setSidebarOpen(false);
@@ -182,6 +210,44 @@ function App() {
     recallOnly,
     run,
     prefs,
+    session,
+    startDaily: (projectRefs) => {
+      const source =
+        projectRefs ??
+        records.filter((e) => e.kind === "project").find((e) => e.data.primary)
+          ?.data.refs ??
+        refs;
+      const minutes =
+        prefs.minutes + (new Date().getDay() === 6 && prefs.saturday ? 10 : 0);
+      const items = dailyQueue(
+        records,
+        Date.now(),
+        minutes,
+        source,
+        !!projectRefs,
+      );
+      if (!items.length) {
+        setNotice(
+          "You are up to date. Read, meditate, or choose a passage to practice anytime.",
+        );
+        return;
+      }
+      setSession({ items, position: 0 });
+      setRefs(items[0].refs);
+      setRecallOnly(items[0].reason === "review");
+      setPage("Practice");
+      window.scrollTo({ top: 0, behavior: "instant" });
+    },
+    nextPractice: () => {
+      if (!session) return;
+      const next = session.position + 1;
+      setSession({ ...session, position: next });
+      if (next < session.items.length) {
+        setRefs(session.items[next].refs);
+        setRecallOnly(session.items[next].reason === "review");
+      }
+      window.scrollTo({ top: 0, behavior: "instant" });
+    },
   };
   return (
     <>
@@ -339,7 +405,10 @@ function App() {
               )}
               {page === "Progress" && <Progress {...ctx} />}
               {page === "Practice" && (
-                <Practice key={refs.join(",")} {...ctx} />
+                <Practice
+                  key={(session?.position ?? "manual") + refs.join(",")}
+                  {...ctx}
+                />
               )}
               {page === "Chapter Code" && <ChapterCode {...ctx} />}
               {page === "Meditation" && <Meditation {...ctx} />}
@@ -501,12 +570,17 @@ function Today(c: Ctx) {
       : now.getHours() < 18
         ? "Good afternoon"
         : "Good evening";
-  const currentRef = current?.[0] ?? c.refs[0];
+  const draft = c.records
+    .filter((e) => e.kind === "draft")
+    .filter((e) => e.data.scope === "practice" && e.data.text.trim())
+    .sort((a, b) => b.data.updated - a.data.updated)[0];
+  const currentRef = draft?.data.refs[0] ?? current?.[0] ?? c.refs[0];
   const completion = primary
     ? primary.data.refs.filter((r) =>
         mastered.some((s) => s.id === "verse:" + r),
       ).length
     : 0;
+
   return (
     <>
       <div className="today-layout">
@@ -540,16 +614,24 @@ function Today(c: Ctx) {
           <section className="hero">
             <div className="row">
               <span className="eyebrow">
-                {primary ? "YOUR PRIMARY MEMORY PROJECT" : "A WORD TO KEEP"}
+                {draft
+                  ? "SAVED PRACTICE"
+                  : primary
+                    ? "YOUR PRIMARY MEMORY PROJECT"
+                    : "A WORD TO KEEP"}
               </span>
               <span className="pill">KJV</span>
             </div>
-            <h2>{primary?.data.name ?? label(c.books, currentRef)}</h2>
-            {primary && (
+            <h2>
+              {draft
+                ? label(c.books, currentRef)
+                : (primary?.data.name ?? label(c.books, currentRef))}
+            </h2>
+            {primary && !draft && (
               <p className="passage-reference">{label(c.books, currentRef)}</p>
             )}
             <blockquote>{textFor(c.books, currentRef)}</blockquote>
-            {primary && (
+            {primary && !draft && (
               <>
                 <progress
                   aria-label="Primary project completion"
@@ -565,12 +647,17 @@ function Today(c: Ctx) {
               <button
                 className="primary"
                 onClick={() => {
-                  c.select(current?.length ? current : c.refs);
-                  c.go("Practice");
+                  if (draft) {
+                    c.select(draft.data.refs);
+                    c.go("Practice");
+                  } else c.startDaily();
                 }}
               >
                 Continue Practice <ArrowRight size={18} aria-hidden="true" />
               </button>
+              {draft && (
+                <span className="draft-badge">Resume saved recall</span>
+              )}
               <span className="muted">
                 About{" "}
                 {c.prefs.minutes +
@@ -598,8 +685,8 @@ function Today(c: Ctx) {
         <div>
           <span className="eyebrow">ROOM FOR SOMETHING NEW</span>
           <h2>
-            {newAllowance(reviews, Date.now(), c.prefs.minutes)} verses
-            suggested
+            {newMaterialAllowance(c.records, Date.now(), c.prefs.minutes)}{" "}
+            verses suggested
           </h2>
           <p>Missed days carry forward. There is no streak to protect.</p>
           <button className="text-button" onClick={() => c.go("Memory")}>
@@ -607,6 +694,30 @@ function Today(c: Ctx) {
           </button>
         </div>
       </div>
+      {c.records
+        .filter((e) => e.kind === "draft")
+        .filter((e) => e.data.scope === "reflection" && e.data.text.trim())
+        .sort((a, b) => b.data.updated - a.data.updated)
+        .slice(0, 1)
+        .map((d) => (
+          <div key={d.id} className="resume-writing">
+            <div>
+              <p className="eyebrow">A THOUGHT TO RETURN TO</p>
+              <h2>{label(c.books, d.data.refs[0])}</h2>
+              <p>
+                Your unfinished reflection is kept privately on this device.
+              </p>
+            </div>
+            <button
+              onClick={() => {
+                c.select(d.data.refs);
+                c.go("Meditation");
+              }}
+            >
+              Continue writing <ArrowRight size={16} aria-hidden="true" />
+            </button>
+          </div>
+        ))}
       <div className="quick-links" aria-label="Quick access">
         {(
           [
@@ -783,50 +894,132 @@ function Progress(c: Ctx) {
   );
 }
 function Bible(c: Ctx) {
-  const [book, setBook] = useState(Number(c.refs[0].split(":")[0])),
-    [chapter, setChapter] = useState(Number(c.refs[0].split(":")[1])),
+  const [book, setBook] = useState(
+      Number((c.prefs.reading?.ref ?? c.refs[0]).split(":")[0]),
+    ),
+    [chapter, setChapter] = useState(
+      Number((c.prefs.reading?.ref ?? c.refs[0]).split(":")[1]),
+    ),
     [resultPage, setResultPage] = useState(0),
     [query, setQuery] = useState(""),
     [status, setStatus] = useState("all"),
     [selected, setSelected] = useState<Ref[]>([]),
     [compare, setCompare] = useState(""),
     [focus, setFocus] = useState(false),
-    [readerSize, setReaderSize] = useState(24),
+    [readerSize, setReaderSize] = useState(c.prefs.reading?.size ?? 24),
     [importName, setImportName] = useState("RVR1960"),
-    [rights, setRights] = useState(false);
+    [rights, setRights] = useState(false),
+    [readerStatus, setReaderStatus] = useState(""),
+    [projectName, setProjectName] = useState("");
+  const projectDialog = useRef<HTMLDialogElement>(null);
+  const search = useDeferredValue(query.trim());
+  const index = useMemo(
+    () =>
+      c.books.flatMap((b) =>
+        b.chapters.flatMap((ch, i) =>
+          ch.map((text, j) => ({
+            ref: `${b.id}:${i + 1}:${j + 1}` as Ref,
+            text: text.toLocaleLowerCase(),
+          })),
+        ),
+      ),
+    [c.books],
+  );
+  const reviewStages = useMemo(
+    () =>
+      new Map(
+        c.records
+          .filter((e) => e.kind === "review")
+          .map((e) => [e.data.id, e.data.stage]),
+      ),
+    [c.records],
+  );
+  useEffect(() => {
+    let active = true;
+    setReaderStatus("Saving reading position…");
+    void updatePreferences({
+      reading: { ref: `${book}:${chapter}:1`, size: readerSize },
+    })
+      .then(() => {
+        if (active) setReaderStatus("Reading position saved on this device.");
+      })
+      .catch(() => {
+        if (active) setReaderStatus("Reading position could not be saved.");
+      });
+    return () => {
+      active = false;
+    };
+  }, [book, chapter, readerSize]);
+  const moveChapter = (direction: 1 | -1) => {
+    const next = adjacentChapter(c.books, book, chapter, direction);
+    if (!next) return;
+    setBook(next.book);
+    setChapter(next.chapter);
+    setQuery("");
+    setSelected([]);
+    setResultPage(0);
+    window.scrollTo({ top: 0, behavior: "instant" });
+  };
+
   useEffect(() => setResultPage(0), [query, book, chapter, status]);
   const translations = c.records.filter((e) => e.kind === "translation");
-  let results: Ref[] = [];
-  if (query) {
+  let results: Ref[] = [],
+    referenceSearch = false;
+  if (search) {
     try {
-      results = parseRefs(query, c.books);
+      results = parseRefs(search, c.books);
+      referenceSearch = true;
     } catch {
-      for (const b of c.books)
-        for (let i = 0; i < b.chapters.length; i++)
-          for (let j = 0; j < b.chapters[i].length; j++)
-            if (b.chapters[i][j].toLowerCase().includes(query.toLowerCase()))
-              results.push(`${b.id}:${i + 1}:${j + 1}`);
+      results = index
+        .filter((v) => v.text.includes(search.toLocaleLowerCase()))
+        .map((v) => v.ref);
       for (const [topic, passages] of topics)
-        if (topic.toLowerCase().includes(query.toLowerCase()))
+        if (topic.toLowerCase().includes(search.toLowerCase()))
           results.push(...parseRefs(passages, c.books));
       results = [...new Set(results)];
     }
   } else results = allRefs(c.books, book, chapter);
   if (status !== "all")
     results = results.filter((r) => {
-      const s =
-        c.records
-          .filter((e) => e.kind === "review")
-          .find((e) => e.id === "review:verse:" + r)?.data.stage ?? 0;
+      const s = reviewStages.get("verse:" + r) ?? 0;
       return status === "new" ? s === 0 : s >= 3;
     });
   const translation = translations.find((t) => t.id === compare)?.data;
+  const selection = selected.length
+    ? selected
+    : referenceSearch && results.length
+      ? results
+      : allRefs(c.books, book, chapter);
   return (
     <>
       <Heading
         eyebrow="THE SCRIPTURE LIBRARY"
         title="Read. Receive. Remember."
       />
+      <div className="chapter-navigation">
+        <button
+          aria-label="Previous chapter"
+          disabled={!adjacentChapter(c.books, book, chapter, -1)}
+          onClick={() => moveChapter(-1)}
+        >
+          <ChevronLeft size={20} aria-hidden="true" />
+          <span>Previous</span>
+        </button>
+        <div>
+          <p className="eyebrow">KING JAMES VERSION</p>
+          <h2>
+            {c.books[book - 1].name} {chapter}
+          </h2>
+        </div>
+        <button
+          aria-label="Next chapter"
+          disabled={!adjacentChapter(c.books, book, chapter, 1)}
+          onClick={() => moveChapter(1)}
+        >
+          <span>Next</span>
+          <ChevronRight size={20} aria-hidden="true" />
+        </button>
+      </div>
       <section className={"bible-surface" + (focus ? " focused-reader" : "")}>
         <div className="controls reader-toolbar">
           <label>
@@ -881,7 +1074,10 @@ function Bible(c: Ctx) {
             </select>
           </label>
         </div>
-        <div className="row">
+        <p className="reader-status" role="status">
+          {readerStatus}
+        </p>
+        <div className="row reader-options">
           <button onClick={() => setFocus(!focus)}>
             {focus ? "Leave quiet reader" : "Quiet reader"}
           </button>
@@ -926,16 +1122,57 @@ function Bible(c: Ctx) {
             </button>
             <button
               onClick={() => {
-                c.select(
-                  selected.length ? selected : allRefs(c.books, book, chapter),
-                );
+                c.select(selection);
                 c.go("Practice");
               }}
             >
-              Practice {selected.length || "chapter"} selected
+              Practice{" "}
+              {selected.length || (referenceSearch ? "passage" : "chapter")}{" "}
+              selected
             </button>
-            <button onClick={() => setSelected([])}>Clear selection</button>
+            <button disabled={!selected.length} onClick={() => setSelected([])}>
+              Clear selection
+            </button>
+            <button
+              onClick={() => {
+                setProjectName(
+                  label(c.books, selection[0]) +
+                    (selection.length > 1 ? " and following" : ""),
+                );
+                projectDialog.current?.showModal();
+              }}
+            >
+              Create memory project
+            </button>
+            <button
+              onClick={() => {
+                c.select(selection);
+                c.go("Meditation");
+              }}
+            >
+              Meditate on selection
+            </button>
           </div>
+        )}
+        {search && results.length === 0 && (
+          <div className="empty-state">
+            <h2>No matching Scripture found.</h2>
+            <p>
+              Try a reference such as John 3:16, a shorter phrase, or a topic
+              such as prayer.
+            </p>
+            <button
+              onClick={() => {
+                setQuery("");
+                setStatus("all");
+              }}
+            >
+              Return to this chapter
+            </button>
+          </div>
+        )}
+        {query !== search && (
+          <p role="status">Searching your offline library…</p>
         )}
         {results.length > 200 && (
           <div className="row">
@@ -950,6 +1187,49 @@ function Bible(c: Ctx) {
               onClick={() => setResultPage(resultPage + 1)}
             >
               Next results
+            </button>
+          </div>
+        )}
+        {!!selected.length && !focus && (
+          <div
+            className="selection-bar"
+            role="region"
+            aria-label="Selected passage actions"
+          >
+            <div>
+              <strong>
+                {selected.length} {selected.length === 1 ? "verse" : "verses"}{" "}
+                selected
+              </strong>
+              <small>
+                {label(c.books, selected[0])}
+                {selected.length > 1
+                  ? " + " + (selected.length - 1) + " more"
+                  : ""}
+              </small>
+            </div>
+            <button
+              className="primary"
+              onClick={() => {
+                c.select(selected);
+                c.go("Practice", true);
+              }}
+            >
+              Practice selection
+            </button>
+            <button
+              onClick={() => {
+                c.select(selected);
+                c.go("Meditation");
+              }}
+            >
+              Reflect
+            </button>
+            <button
+              aria-label="Clear selected passages"
+              onClick={() => setSelected([])}
+            >
+              Clear
             </button>
           </div>
         )}
@@ -994,6 +1274,59 @@ function Bible(c: Ctx) {
           ))}
         </div>
       </section>
+      <dialog
+        ref={projectDialog}
+        className="project-dialog"
+        aria-labelledby="reader-project-title"
+      >
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            void c.run(async () => {
+              if (!projectName.trim()) throw Error("Name this memory project.");
+              await put("project", {
+                name: projectName.trim(),
+                refs: selection,
+                kind:
+                  selection.length ===
+                    c.books[book - 1].chapters[chapter - 1].length &&
+                  selection.every(
+                    (ref, i) => ref === `${book}:${chapter}:${i + 1}`,
+                  )
+                    ? "chapter"
+                    : "passage",
+                primary: !c.records.some((e) => e.kind === "project"),
+              });
+              projectDialog.current?.close();
+            }, "Memory project created. Find it in Memory.");
+          }}
+        >
+          <p className="eyebrow">KEEP THIS PASSAGE</p>
+          <h2 id="reader-project-title">A place in your memory.</h2>
+          <p>{selection.length} selected verses · KJV</p>
+          <label>
+            Memory project name
+            <input
+              value={projectName}
+              onChange={(e) => setProjectName(e.target.value)}
+              autoFocus
+              required
+              maxLength={120}
+            />
+          </label>
+          <div className="row">
+            <button type="submit" className="primary">
+              Save memory project
+            </button>
+            <button
+              type="button"
+              onClick={() => projectDialog.current?.close()}
+            >
+              Cancel
+            </button>
+          </div>
+        </form>
+      </dialog>
       <details>
         <summary>Translation packages and permissions</summary>
         <p>
@@ -1187,17 +1520,7 @@ function Projects(c: Ctx) {
             <div className="row">
               <button
                 onClick={() => {
-                  const reviews = c.records
-                    .filter((e) => e.kind === "review")
-                    .map((e) => e.data);
-                  const r = planProject(
-                    p.data.refs,
-                    reviews,
-                    Date.now(),
-                    c.prefs.minutes,
-                  );
-                  c.select(r.length ? r : p.data.refs.slice(0, 5));
-                  c.go("Practice");
+                  c.startDaily(p.data.refs);
                 }}
               >
                 Adaptive practice
@@ -1266,11 +1589,44 @@ function Practice(c: Ctx) {
     [hints, setHints] = useState(0),
     [self, setSelf] = useState(3),
     [difficulty, setDifficulty] = useState(2),
-    [result, setResult] = useState<ReturnType<typeof grade>>(),
+    [result, setResult] = useState<ReturnType<typeof gradePassage>>(),
+    [saving, setSaving] = useState(false),
     [refTest, setRefTest] = useState(""),
     [recorded, setRecorded] = useState(false),
     [showMeditation, setShowMeditation] = useState(false),
     [studyVisible, setStudyVisible] = useState(true);
+  const draft = useLocalDraft("draft:practice:" + c.refs.join("|"), {
+    scope: "practice",
+    text: "",
+    updated: Date.now(),
+    refs: c.refs,
+  });
+  const draftLoaded = useRef(false);
+  useEffect(() => {
+    if (draft.ready && !draftLoaded.current) {
+      draftLoaded.current = true;
+      setTyped(draft.value.text);
+      setRefTest(draft.value.reference ?? "");
+      setHints(draft.value.hints ?? 0);
+      if (draft.value.method && methods.includes(draft.value.method))
+        setMethod(draft.value.method);
+      setStudyVisible(
+        draft.value.studyVisible ??
+          (draft.value.method ??
+            (c.recallOnly ? "Type from memory" : "Read and repeat")) !==
+            "Type from memory",
+      );
+      setHide(draft.value.hiding ?? 0);
+      setStep(Math.min(draft.value.step ?? 1, c.refs.length));
+      if (
+        draft.value.section &&
+        (draft.value.section === "all" || groups.includes(draft.value.section))
+      )
+        setSection(draft.value.section);
+    }
+  }, [draft.ready]);
+  const item = c.session?.items[c.session.position];
+  const finished = !!c.session && c.session.position >= c.session.items.length;
   const started = useRef(Date.now());
   const groups = [
     ...new Set(c.refs.map((r) => r.split(":").slice(0, 2).join(":"))),
@@ -1303,120 +1659,136 @@ function Practice(c: Ctx) {
     });
   const check = () => {
     void c.run(async () => {
-      const r = grade(expected, typed);
+      const r = gradePassage(
+        active.map((ref) => ({ ref, text: textFor(c.books, ref) })),
+        typed,
+      );
       setResult(r);
       setRecorded(false);
     }, "Recall compared on this device.");
   };
-  const save = () =>
-    void c.run(async () => {
-      if (recorded)
-        throw Error("This attempt is already saved. Start a fresh attempt.");
-      if (!result) throw Error("Compare your recall first.");
-      const at = Date.now();
-      const supplied = typed.split("\n").filter((s) => s.trim());
-      const transitionScores = active.slice(1).map((_, i) => {
-        const before = normalize(textFor(c.books, active[i]))
-            .slice(-3)
-            .join(" "),
-          after = normalize(textFor(c.books, active[i + 1]))
-            .slice(0, 3)
-            .join(" ");
-        return normalize(typed)
-          .join(" ")
-          .includes(before + " " + after)
-          ? 1
-          : 0;
-      });
-      const transitionAccuracy = transitionScores.length
-        ? transitionScores.reduce<number>((a, b) => a + b, 0) /
-          transitionScores.length
-        : 1;
-      const saveUnit = async (
-        unitId: string,
-        refs: Ref[],
-        accuracy: number,
-        level: "verse" | "chapter" | "passage",
-      ) => {
-        const previous = await db.records.get("review:" + unitId);
-        const attempt: ReviewAttempt = {
-          unitId,
-          at,
-          accuracy,
-          hints:
-            hints + (method !== "Type from memory" && studyVisible ? 1 : 0),
-          difficulty,
-          self,
-          transitionAccuracy,
-          referenceAccuracy:
-            refTest.trim().toLowerCase() ===
-            label(c.books, active[0]).toLowerCase()
-              ? 1
-              : 0,
-        };
-        await put("unit", { refs, level }, unitId);
-        await put("attempt", attempt);
-        await put(
-          "review",
-          schedule(
-            previous?.kind === "review" ? previous.data : undefined,
-            attempt,
-          ),
-          "review:" + unitId,
-        );
-      };
-      await db.transaction("rw", db.records, async () => {
-        for (let i = 0; i < active.length; i++)
-          await saveUnit(
-            "verse:" + active[i],
-            [active[i]],
-            grade(
-              textFor(c.books, active[i]),
-              supplied[i] ?? (active.length === 1 ? typed : ""),
-            ).accuracy,
-            "verse",
-          );
-        if (active.length > 1) {
-          const unitId =
-            chapterComplete && chapterGroups.size === 1
-              ? "chapter:" + active[0].split(":").slice(0, 2).join(":")
-              : "passage:" + active.join(",");
-          await saveUnit(
+  const save = () => {
+    if (saving || recorded) return;
+    setSaving(true);
+    void c
+      .run(async () => {
+        if (recorded)
+          throw Error("This attempt is already saved. Start a fresh attempt.");
+        if (!result) throw Error("Compare your recall first.");
+        const at = Date.now();
+        const supplied = result.verses.map((v) => v.actual);
+        const transitionAccuracy = result.transitionAccuracy;
+        const saveUnit = async (
+          unitId: string,
+          refs: Ref[],
+          accuracy: number,
+          level: "verse" | "chapter" | "passage",
+        ) => {
+          const previous = await db.records.get("review:" + unitId);
+          const attempt: ReviewAttempt = {
             unitId,
-            active,
-            Math.min(result.accuracy, transitionAccuracy),
-            "chapter" === unitId.split(":")[0] ? "chapter" : "passage",
+            at,
+            accuracy,
+            hints:
+              hints +
+              (method !== "Type from memory" &&
+              studyVisible &&
+              !(method === "Progressive word hiding" && hide === 100)
+                ? 1
+                : 0),
+            difficulty,
+            self,
+            transitionAccuracy,
+            referenceAccuracy: refTest.trim()
+              ? refTest.trim().toLowerCase() ===
+                label(c.books, active[0]).toLowerCase()
+                ? 1
+                : 0
+              : undefined,
+          };
+          await put("unit", { refs, level }, unitId);
+          await put("attempt", attempt);
+          await put(
+            "review",
+            schedule(
+              previous?.kind === "review" ? previous.data : undefined,
+              attempt,
+            ),
+            "review:" + unitId,
           );
-        }
-        if (chapterGroups.size > 1)
-          for (const [key, group] of chapterGroups) {
-            const [book, chapter] = key.split(":").map(Number);
-            const full = allRefs(c.books, book, chapter);
-            if (
-              group.length === full.length &&
-              group.every((r, i) => r === full[i])
-            ) {
-              const actual = group
-                .map((r) => supplied[active.indexOf(r)] ?? "")
-                .join("\n");
-              await saveUnit(
-                "chapter:" + key,
-                group,
-                grade(group.map((r) => textFor(c.books, r)).join("\n"), actual)
-                  .accuracy,
-                "chapter",
-              );
-            }
+        };
+        await db.transaction("rw", db.records, async () => {
+          for (let i = 0; i < active.length; i++)
+            await saveUnit(
+              "verse:" + active[i],
+              [active[i]],
+              result.verses[i].accuracy,
+              "verse",
+            );
+          if (active.length > 1) {
+            const unitId =
+              chapterComplete && chapterGroups.size === 1
+                ? "chapter:" + active[0].split(":").slice(0, 2).join(":")
+                : "passage:" + active.join(",");
+            await saveUnit(
+              unitId,
+              active,
+              Math.min(result.accuracy, transitionAccuracy),
+              "chapter" === unitId.split(":")[0] ? "chapter" : "passage",
+            );
           }
-        await put("session", {
-          at,
-          minutes: Math.max(1, Math.round((at - started.current) / 60000)),
-          period: new Date().getHours() < 12 ? "morning" : "evening",
-          refs: active,
+          if (chapterGroups.size > 1)
+            for (const [key, group] of chapterGroups) {
+              const [book, chapter] = key.split(":").map(Number);
+              const full = allRefs(c.books, book, chapter);
+              if (
+                group.length === full.length &&
+                group.every((r, i) => r === full[i])
+              ) {
+                const actual = group
+                  .map((r) => supplied[active.indexOf(r)] ?? "")
+                  .join("\n");
+                await saveUnit(
+                  "chapter:" + key,
+                  group,
+                  grade(
+                    group.map((r) => textFor(c.books, r)).join("\n"),
+                    actual,
+                  ).accuracy,
+                  "chapter",
+                );
+              }
+            }
+          await put("session", {
+            at,
+            minutes: Math.max(1, Math.round((at - started.current) / 60000)),
+            period: new Date().getHours() < 12 ? "morning" : "evening",
+            refs: active,
+          });
         });
-      });
-      setRecorded(true);
-    }, "Review saved. Your next review is scheduled gently.");
+        await draft.clear();
+        setRecorded(true);
+      }, "Review saved. Your next review is scheduled gently.")
+      .finally(() => setSaving(false));
+  };
+  if (finished)
+    return (
+      <section className="session-complete">
+        <p className="eyebrow">A QUIET FINISH</p>
+        <h1>Enough for today.</h1>
+        <p>
+          You practiced {c.session!.items.length} passages. Your reviews are
+          saved and the next dates are scheduled.
+        </p>
+        <p>Return when you are ready. There is no streak to protect.</p>
+        <div className="row">
+          <button className="primary" onClick={() => c.go("Today")}>
+            Back to Today
+          </button>
+          <button onClick={() => c.go("Progress")}>View your progress</button>
+        </div>
+      </section>
+    );
   return (
     <>
       <Heading eyebrow="ACCURACY BEFORE SPEED" title="Let the words take root.">
@@ -1425,7 +1797,77 @@ function Practice(c: Ctx) {
           {chapterComplete ? "whole-chapter recall" : "passage practice"}
         </p>
       </Heading>
-      <section>
+      {c.session && (
+        <div className="session-strip">
+          <div>
+            <p className="eyebrow">
+              DAILY PRACTICE · {c.session.position + 1} OF{" "}
+              {c.session.items.length}
+            </p>
+            <strong>
+              {item?.reason === "review"
+                ? "Return to a familiar passage"
+                : "Learn something new"}
+            </strong>
+            <p>
+              {item?.reason === "review"
+                ? stages[item.stage] + " · Review before new material"
+                : "Read slowly. Recall when you feel ready."}
+            </p>
+          </div>
+          <progress
+            aria-label="Daily session progress"
+            value={c.session.position}
+            max={c.session.items.length}
+          />
+        </div>
+      )}
+      <section className="practice-workspace">
+        <div
+          className="practice-phases"
+          role="group"
+          aria-label="Practice phases"
+        >
+          <button
+            aria-pressed={studyVisible}
+            onClick={() => {
+              if (!studyVisible) {
+                setHints(hints + 1);
+                draft.update({ hints: hints + 1 });
+              }
+              setStudyVisible(true);
+              draft.update({ studyVisible: true });
+              if (method === "Type from memory") {
+                setMethod("Read and repeat");
+                draft.update({ method: "Read and repeat" });
+              }
+            }}
+          >
+            1. Study
+          </button>
+          <button
+            aria-pressed={!studyVisible}
+            onClick={() => {
+              setStudyVisible(false);
+              draft.update({ studyVisible: false });
+              setResult(undefined);
+            }}
+          >
+            2. Recall
+          </button>
+          <span aria-current={result ? "step" : undefined}>3. Review</span>
+        </div>
+        <p className="draft-status" role="status">
+          {draft.status === "loading"
+            ? "Loading saved recall…"
+            : draft.status === "saving"
+              ? "Saving draft on this device…"
+              : draft.status === "error"
+                ? "Draft could not be saved. Copy your text before leaving."
+                : draft.value.text
+                  ? "Draft saved on this device."
+                  : ""}
+        </p>
         {groups.length > 1 && (
           <label>
             Recitation section
@@ -1438,6 +1880,12 @@ function Practice(c: Ctx) {
                 setResult(undefined);
                 setStep(1);
                 setHints(0);
+                draft.update({
+                  section: e.target.value,
+                  step: 1,
+                  text: "",
+                  hints: 0,
+                });
               }}
             >
               <option value="all">Combine all selected passages</option>
@@ -1452,10 +1900,17 @@ function Practice(c: Ctx) {
         <label>
           Memorization method
           <select
+            disabled={!draft.ready || saving}
             aria-label="Memorization method"
             value={method}
             onChange={(e) => {
               setMethod(e.target.value);
+              setStudyVisible(e.target.value !== "Type from memory");
+              draft.update({
+                method: e.target.value,
+                hints: 0,
+                studyVisible: e.target.value !== "Type from memory",
+              });
               setHints(0);
               setHide(0);
               setResult(undefined);
@@ -1469,7 +1924,15 @@ function Practice(c: Ctx) {
         </label>
         {method === "Cumulative memorization" && (
           <div className="row">
-            <button disabled={step <= 1} onClick={() => setStep(step - 1)}>
+            <button
+              disabled={step <= 1}
+              onClick={() => {
+                setStep(step - 1);
+                draft.update({ step: step - 1 });
+                setResult(undefined);
+                setRecorded(false);
+              }}
+            >
               Shorter section
             </button>
             <span>
@@ -1479,7 +1942,8 @@ function Practice(c: Ctx) {
               disabled={step >= sectionRefs.length}
               onClick={() => {
                 setStep(step + 1);
-                setTyped("");
+                setRecorded(false);
+                draft.update({ step: step + 1, hints: 0 });
                 setResult(undefined);
               }}
             >
@@ -1498,7 +1962,9 @@ function Practice(c: Ctx) {
               value={hide}
               onChange={(e) => {
                 setHide(+e.target.value);
-                if (+e.target.value < hide) setHints(hints + 1);
+                const assisted = +e.target.value < hide ? hints + 1 : hints;
+                setHints(assisted);
+                draft.update({ hiding: +e.target.value, hints: assisted });
               }}
             />
           </label>
@@ -1536,32 +2002,35 @@ function Practice(c: Ctx) {
             return (
               <p key={r}>
                 <sup>{label(c.books, r)}</sup>{" "}
-                {method === "Type from memory"
-                  ? hints >= 3
-                    ? textFor(c.books, r)
-                    : hints === 2
+                {!studyVisible
+                  ? "Recall this verse from memory."
+                  : method === "Type from memory"
+                    ? hints >= 3
+                      ? textFor(c.books, r)
+                      : hints === 2
+                        ? words.map((w) => w[0]).join(" ")
+                        : hints === 1
+                          ? words.slice(0, 3).join(" ") + " …"
+                          : "Recall from memory."
+                    : method === "First-letter method"
                       ? words.map((w) => w[0]).join(" ")
-                      : hints === 1
-                        ? words.slice(0, 3).join(" ") + " …"
-                        : "Recall from memory."
-                  : method === "First-letter method"
-                    ? words.map((w) => w[0]).join(" ")
-                    : method === "Progressive word hiding"
-                      ? words.map((w, j) => (
-                          <span key={j}>
-                            {(j * 37 + i * 13) % 100 < hide ? (
-                              <span
-                                className="hiddenword"
-                                aria-label="hidden word"
-                              >
-                                {"_".repeat(Math.min(w.length, 9))}
-                              </span>
-                            ) : (
-                              w
-                            )}{" "}
-                          </span>
-                        ))
-                      : textFor(c.books, r)}
+                      : method === "Progressive word hiding"
+                        ? words.map((w, j) => (
+                            <span key={j}>
+                              {(j * 37 + i * 13) % 100 < hide ? (
+                                <span
+                                  className="hiddenword"
+                                  role="img"
+                                  aria-label="hidden word"
+                                >
+                                  {"_".repeat(Math.min(w.length, 9))}
+                                </span>
+                              ) : (
+                                w
+                              )}{" "}
+                            </span>
+                          ))
+                        : textFor(c.books, r)}
               </p>
             );
           })}
@@ -1573,17 +2042,38 @@ function Practice(c: Ctx) {
           </p>
         )}
         <div className="row">
-          <button onClick={() => setStudyVisible(!studyVisible)}>
+          <button
+            onClick={() => {
+              if (!studyVisible) {
+                setHints(hints + 1);
+                draft.update({ hints: hints + 1 });
+              }
+              setStudyVisible(!studyVisible);
+              draft.update({ studyVisible: !studyVisible });
+            }}
+          >
             {studyVisible
               ? "Hide Scripture for independent recall"
               : "Show Scripture"}
           </button>
-          <button onClick={() => setHints(hints + 1)}>
+          <button
+            onClick={() => {
+              setHints(hints + 1);
+              draft.update({ hints: hints + 1 });
+            }}
+          >
             Progressive hint ({hints})
           </button>
           <button
             onClick={() => {
+              if (
+                typed.trim() &&
+                !window.confirm("Clear this attempt and its saved draft?")
+              )
+                return;
               setTyped("");
+              draft.update({ text: "", hints: 0, reference: "" });
+              setRefTest("");
               setResult(undefined);
               setHints(0);
               setRecorded(false);
@@ -1622,13 +2112,24 @@ function Practice(c: Ctx) {
           </>
         )}
         <label>
-          Type or transcribe your recall (one verse per line, in order)
+          Type or transcribe your recall (line breaks are optional)
           <textarea
             className="recall"
             value={typed}
-            maxLength={1000000}
+            maxLength={200000}
+            disabled={!draft.ready || saving}
             onChange={(e) => {
               setTyped(e.target.value);
+              draft.update({
+                text: e.target.value,
+                method,
+                hints,
+                reference: refTest,
+                studyVisible,
+                hiding: hide,
+                step,
+                section,
+              });
               setResult(undefined);
               setRecorded(false);
             }}
@@ -1639,7 +2140,13 @@ function Practice(c: Ctx) {
         </label>
         <label>
           Reference recall (first verse, e.g. Psalms 119:11)
-          <input value={refTest} onChange={(e) => setRefTest(e.target.value)} />
+          <input
+            value={refTest}
+            onChange={(e) => {
+              setRefTest(e.target.value);
+              draft.update({ reference: e.target.value });
+            }}
+          />
         </label>
         {refTest && (
           <p>
@@ -1649,7 +2156,11 @@ function Practice(c: Ctx) {
               : "Check the book, chapter and verse shown above."}
           </p>
         )}
-        <button className="primary" onClick={check}>
+        <button
+          className="primary"
+          disabled={recorded || !draft.ready || !typed.trim() || saving}
+          onClick={check}
+        >
           Compare recall
         </button>
         {result && (
@@ -1661,8 +2172,8 @@ function Practice(c: Ctx) {
                 Visible study text and cues count as assistance. Hide Scripture
                 or choose Type from memory for an unassisted attempt.
                 Capitalization and punctuation are ignored. Verse order and
-                transitions affect passage grading. Separate verses with new
-                lines for individual grading.
+                transitions affect passage grading. Verse scores use word
+                alignment, so line wrapping does not change your result.
               </p>
             </details>
             {result.errors.length ? (
@@ -1678,6 +2189,26 @@ function Practice(c: Ctx) {
               <p className="recall-success">
                 Every word is in place — correct recall.
               </p>
+            )}
+            {active.length > 1 && (
+              <div className="verse-feedback">
+                <h3>Verse-by-verse recall</h3>
+                {result.verses.map((v) => (
+                  <div className="verse-score" key={v.ref}>
+                    <span>{label(c.books, v.ref)}</span>
+                    <strong>{Math.round(v.accuracy * 100)}%</strong>
+                    <progress
+                      aria-label={label(c.books, v.ref) + " accuracy"}
+                      value={v.accuracy}
+                      max={1}
+                    />
+                  </div>
+                ))}
+                <p>
+                  {result.transitions.filter((t) => t.correct).length} of{" "}
+                  {result.transitions.length} transitions recalled in sequence.
+                </p>
+              </div>
             )}
             <details className="word-feedback">
               <summary>Word-by-word feedback</summary>
@@ -1727,9 +2258,51 @@ function Practice(c: Ctx) {
                 </select>
               </label>
             </div>
-            <button disabled={recorded} onClick={save}>
-              {recorded ? "Review recorded" : "Save review & schedule next"}
+            <button disabled={recorded || saving} onClick={save}>
+              {recorded
+                ? "Review recorded"
+                : saving
+                  ? "Saving review…"
+                  : "Save review & schedule next"}
             </button>
+          </div>
+        )}
+        {recorded && (
+          <div className="review-saved">
+            <h3>Kept for the long term.</h3>
+            <p>
+              {c.records
+                .filter((e) => e.kind === "review")
+                .find((e) => e.data.id === "verse:" + active[0])?.data.due
+                ? `Next verse review: ${new Date(c.records.filter((e) => e.kind === "review").find((e) => e.data.id === "verse:" + active[0])!.data.due).toLocaleDateString(undefined, { month: "short", day: "numeric" })}.`
+                : ""}{" "}
+              Your history is saved.
+            </p>
+            <div className="row">
+              {c.session && (
+                <button className="primary" onClick={c.nextPractice}>
+                  {c.session.position + 1 < c.session.items.length
+                    ? "Next passage"
+                    : "Finish session"}
+                  <ArrowRight size={16} aria-hidden="true" />
+                </button>
+              )}
+              {result && result.verses.some((v) => v.accuracy < 0.97) && (
+                <button
+                  onClick={() => {
+                    c.select(
+                      result.verses
+                        .filter((v) => v.accuracy < 0.97)
+                        .map((v) => v.ref),
+                    );
+                    c.go("Practice", true);
+                  }}
+                >
+                  Practice weak verses
+                </button>
+              )}
+              <button onClick={() => c.go("Today")}>Return to Today</button>
+            </div>
           </div>
         )}
       </section>
@@ -1741,7 +2314,7 @@ function Visual({ records, id }: { records: Entry[]; id?: string }) {
   useEffect(() => {
     const v = records.find((e) => e.id === id && e.kind === "visual");
     if (v?.kind !== "visual") return;
-    const u = URL.createObjectURL(v.data.blob);
+    const u = URL.createObjectURL(mediaBlob(v.data.blob));
     setUrl(u);
     return () => URL.revokeObjectURL(u);
   }, [id, records]);
@@ -1868,7 +2441,10 @@ function ChapterCode(c: Ctx) {
               if (file) {
                 if (file.size > 5000000 || !file.type.startsWith("image/"))
                   throw Error("Use an image under 5 MB.");
-                visualId = await put("visual", { blob: file, name: file.name });
+                visualId = await put("visual", {
+                  blob: await packMedia(file),
+                  name: file.name,
+                });
               }
               await put("anchor", { ...form, ref, visualId }, existing);
               setFile(undefined);
@@ -1935,9 +2511,18 @@ function ChapterCode(c: Ctx) {
   );
 }
 function Meditation(c: Ctx) {
-  const [text, setText] = useState(""),
-    [refInput, setRefInput] = useState(label(c.books, c.refs[0])),
-    [collectionName, setCollectionName] = useState(""),
+  const draft = useLocalDraft("draft:reflection:" + c.refs[0], {
+    scope: "reflection",
+    text: "",
+    reference: label(c.books, c.refs[0]),
+    refs: c.refs.slice(0, 1),
+    updated: Date.now(),
+  });
+  const text = draft.value.text,
+    refInput = draft.value.reference ?? label(c.books, c.refs[0]);
+  const setText = (text: string) => draft.update({ text });
+  const setRefInput = (reference: string) => draft.update({ reference });
+  const [collectionName, setCollectionName] = useState(""),
     [collectionRefs, setCollectionRefs] = useState(""),
     [crossInput, setCrossInput] = useState(""),
     [crossNote, setCrossNote] = useState("");
@@ -1963,6 +2548,8 @@ function Meditation(c: Ctx) {
           Private reflection — free and unstructured
           <textarea
             value={text}
+            maxLength={200000}
+            disabled={!draft.ready}
             onChange={(e) => setText(e.target.value)}
             placeholder="A prayer, an observation, an act of obedience…"
           />
@@ -1977,12 +2564,21 @@ function Meditation(c: Ctx) {
                 text,
                 at: Date.now(),
               });
-              setText("");
+              await draft.clear();
             })
           }
         >
           Keep reflection
         </button>
+        <p className="draft-status" role="status">
+          {draft.status === "saving"
+            ? "Saving reflection draft…"
+            : draft.status === "error"
+              ? "Draft could not be saved. Copy your writing before leaving."
+              : draft.value.text
+                ? "Reflection draft saved on this device."
+                : ""}
+        </p>
         <button
           onClick={() =>
             download(
@@ -2200,7 +2796,9 @@ function Listen(c: Ctx) {
     [speed, setSpeed] = useState(1),
     [repeat, setRepeat] = useState("none"),
     [scope, setScope] = useState("all"),
-    [url, setUrl] = useState("");
+    [url, setUrl] = useState(""),
+    [playing, setPlaying] = useState(false),
+    [audioError, setAudioError] = useState("");
   const player = useRef<HTMLAudioElement>(null);
   const filtered = assets.filter(
     (a) =>
@@ -2217,7 +2815,7 @@ function Listen(c: Ctx) {
   const current = assets.find((a) => a.id === active);
   useEffect(() => {
     if (!current) return;
-    const u = URL.createObjectURL(current.data.blob);
+    const u = URL.createObjectURL(mediaBlob(current.data.blob));
     setUrl(u);
     if ("mediaSession" in navigator) {
       navigator.mediaSession.metadata = new MediaMetadata({
@@ -2239,7 +2837,7 @@ function Listen(c: Ctx) {
         navigator.mediaSession.setActionHandler("pause", null);
       }
     };
-  }, [active, current?.data.blob]);
+  }, [active, !!current]);
   useEffect(() => {
     if (player.current) player.current.playbackRate = speed;
   }, [speed, url]);
@@ -2299,7 +2897,7 @@ function Listen(c: Ctx) {
               const key = await put("audio", {
                 name: file.name,
                 refs: parseRefs(range, c.books),
-                blob: file,
+                blob: await packMedia(file),
                 rights,
               });
               setActive(key);
@@ -2375,9 +2973,39 @@ function Listen(c: Ctx) {
                 loop={repeat === "track"}
                 autoPlay
                 onEnded={next}
+                onPlay={() => setPlaying(true)}
+                onPause={() => setPlaying(false)}
+                onError={() =>
+                  setAudioError(
+                    "This browser could not decode this recording. Try a supported MP3, M4A or WAV file.",
+                  )
+                }
                 aria-label="Scripture audio player"
               />
+              {audioError && <p role="alert">{audioError}</p>}
               <div className="controls">
+                <button
+                  className="primary"
+                  aria-label={
+                    playing ? "Pause Scripture audio" : "Play Scripture audio"
+                  }
+                  onClick={() => {
+                    const audio = player.current;
+                    if (!audio) return;
+                    if (audio.paused) {
+                      setAudioError("");
+                      void audio
+                        .play()
+                        .catch(() =>
+                          setAudioError(
+                            "Playback did not start. Try Play again or choose a supported audio file.",
+                          ),
+                        );
+                    } else audio.pause();
+                  }}
+                >
+                  {playing ? "Pause" : "Play"}
+                </button>
                 <label>
                   Speed
                   <select
@@ -2456,11 +3084,7 @@ function Settings(c: Ctx) {
       `word-within-${new Date().toISOString().slice(0, 10)}.wwbackup`,
       content,
     );
-    await put(
-      "preferences",
-      { ...c.prefs, lastBackup: Date.now() },
-      "preferences",
-    );
+    await updatePreferences({ lastBackup: Date.now() });
   };
   useEffect(() => {
     if (!auto) return;
@@ -2474,11 +3098,7 @@ function Settings(c: Ctx) {
         const writable = await autoHandle.current.createWritable();
         await writable.write(content);
         await writable.close();
-        await put(
-          "preferences",
-          { ...c.prefs, lastBackup: Date.now() },
-          "preferences",
-        );
+        await updatePreferences({ lastBackup: Date.now() });
       }, "Automatic encrypted backup written while the app is open.");
     }, 3600000);
     return () => clearInterval(t);
@@ -2537,11 +3157,13 @@ function Settings(c: Ctx) {
             void c.run(async () => {
               if (pref.minutes < 5 || pref.minutes > 180)
                 throw Error("Choose between 5 and 180 minutes.");
-              await put(
-                "preferences",
-                { ...pref, lastBackup: c.prefs.lastBackup },
-                "preferences",
-              );
+              await updatePreferences({
+                minutes: pref.minutes,
+                morning: pref.morning,
+                evening: pref.evening,
+                prompts: pref.prompts,
+                saturday: pref.saturday,
+              });
             })
           }
         >

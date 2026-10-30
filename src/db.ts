@@ -51,3 +51,22 @@ export function download(
   a.click();
   setTimeout(() => URL.revokeObjectURL(url), 10000);
 }
+
+export async function updatePreferences(
+  patch: Partial<import("./domain").NotificationPreference>,
+) {
+  await db.transaction("rw", db.records, async () => {
+    const row = await db.records.get("preferences");
+    const existing =
+      row?.kind === "preferences"
+        ? row.data
+        : {
+            minutes: 20,
+            morning: "07:00",
+            evening: "20:00",
+            prompts: false,
+            saturday: true,
+          };
+    await put("preferences", { ...existing, ...patch }, "preferences");
+  });
+}

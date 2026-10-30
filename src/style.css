@@ -1583,3 +1583,330 @@ button svg.lucide {
   white-space: nowrap;
   border: 0;
 }
+/* Daily learning and reading tools share the paper-and-ink system. */
+.session-strip {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 32px;
+  padding: 24px;
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent-gold);
+  border-radius: 8px;
+  margin: 0 0 24px;
+  background: var(--surface);
+}
+.session-strip p {
+  margin: 4px 0;
+  color: var(--text-secondary);
+  font-size: 0.8125rem;
+}
+.session-strip .eyebrow {
+  font-size: 0.625rem;
+}
+.session-strip > progress {
+  width: 140px;
+  flex-shrink: 0;
+}
+.practice-phases {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 16px;
+}
+.practice-phases button {
+  border: 0;
+  color: var(--text-secondary);
+  font-size: 0.8125rem;
+}
+.practice-phases button[aria-pressed="true"] {
+  background: var(--text-primary);
+  color: var(--bg);
+}
+.practice-phases span {
+  color: var(--text-secondary);
+  font-size: 0.8125rem;
+  padding: 10px 16px;
+}
+.practice-phases span[aria-current="step"] {
+  font-weight: 650;
+  color: var(--text-primary);
+}
+.draft-status,
+.reader-status {
+  font-size: 0.6875rem;
+  min-height: 20px;
+  color: var(--text-secondary);
+}
+.draft-badge {
+  font-size: 0.6875rem;
+  border-bottom: 1px solid var(--accent-gold);
+  padding: 4px 0;
+}
+.practice-workspace > .scripture {
+  min-height: 120px;
+  padding: 32px 0;
+}
+.review-saved {
+  padding: 24px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  margin-top: 24px;
+}
+.review-saved h3 {
+  margin-top: 0;
+}
+.review-saved p {
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+}
+.session-complete {
+  max-width: 640px;
+  margin: 48px auto;
+  padding: 32px 0;
+}
+.session-complete h1 {
+  font-size: clamp(2.5rem, 6vw, 4rem);
+  font-weight: 650;
+  letter-spacing: -0.06em;
+}
+.session-complete p {
+  color: var(--text-secondary);
+}
+.session-complete .row {
+  margin-top: 32px;
+}
+.verse-feedback {
+  margin: 24px 0;
+}
+.verse-score {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 4px 16px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 0.8125rem;
+}
+.verse-score progress {
+  grid-column: 1/-1;
+  margin: 4px 0;
+  height: 3px;
+}
+.verse-feedback > p {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+}
+.chapter-navigation {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  border-block: 1px solid var(--border);
+  padding: 16px 0;
+  margin-bottom: 24px;
+}
+.chapter-navigation > div {
+  text-align: center;
+  min-width: 0;
+}
+.chapter-navigation h2 {
+  font-size: 1.5rem;
+  margin: 4px 0;
+}
+.chapter-navigation .eyebrow {
+  font-size: 0.5625rem;
+  margin: 0;
+}
+.chapter-navigation button {
+  border: 0;
+  padding: 8px;
+  gap: 4px;
+}
+.chapter-navigation button span {
+  font-size: 0.75rem;
+}
+.reader-options {
+  gap: 16px;
+}
+.selection-bar {
+  position: sticky;
+  top: 8px;
+  z-index: 8;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  padding: 12px 16px;
+  background: var(--surface);
+  border: 1px solid var(--text-primary);
+  border-radius: 8px;
+  margin: 24px 0;
+}
+.selection-bar > div {
+  margin-right: auto;
+}
+.selection-bar strong {
+  display: block;
+  font-size: 0.8125rem;
+}
+.selection-bar small {
+  display: block;
+  font-size: 0.625rem;
+}
+.selection-bar button {
+  font-size: 0.75rem;
+}
+.project-dialog {
+  max-width: 460px;
+  width: calc(100% - 40px);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: var(--bg);
+  color: var(--text-primary);
+  padding: 32px;
+  box-shadow: 0 16px 64px #0002;
+}
+.project-dialog::backdrop {
+  background: #20211f66;
+}
+.project-dialog h2 {
+  font-size: 1.75rem;
+}
+.project-dialog p {
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+}
+.empty-state {
+  padding: 40px 0;
+}
+.empty-state h2 {
+  font-size: 1.25rem;
+}
+.empty-state p {
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+}
+.resume-writing {
+  max-width: 1000px;
+  margin: 32px auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  border-block: 1px solid var(--border);
+  padding: 24px 0;
+}
+.resume-writing h2 {
+  font-size: 1.25rem;
+}
+.resume-writing p {
+  font-size: 0.8125rem;
+  color: var(--text-secondary);
+}
+@media (max-width: 700px) {
+  .today-layout {
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+  }
+  .date-panel {
+    display: contents;
+  }
+  .date-poster {
+    order: 0;
+    grid-template-columns: 130px minmax(0, 1fr);
+    column-gap: 20px;
+    margin: 0;
+    padding: 0;
+  }
+  .poster-day {
+    grid-column: 1;
+    grid-row: 1/4;
+    font-size: 7rem;
+    line-height: 1;
+    margin: 0 0 0 -0.05em;
+    align-self: center;
+  }
+  .poster-month {
+    grid-column: 2;
+    grid-row: 1;
+    font-size: 1.375rem;
+    align-self: end;
+  }
+  .poster-weekday {
+    grid-column: 2;
+    grid-row: 2;
+    font-size: 1.125rem;
+    text-align: left;
+    margin-top: 6px;
+  }
+  .poster-year {
+    grid-column: 2;
+    grid-row: 3;
+    font-size: 1.375rem;
+    margin-top: 6px;
+  }
+  .today-reading {
+    order: 1;
+    padding-top: 0;
+  }
+  .date-panel .month-calendar {
+    order: 2;
+    margin: 8px 0 0;
+  }
+  .hero {
+    margin-bottom: 0;
+  }
+  .today-reading .heading {
+    margin-bottom: 24px;
+  }
+  .session-strip {
+    padding: 16px;
+    display: block;
+  }
+  .session-strip > progress {
+    width: 100%;
+    margin-top: 16px;
+  }
+  .practice-phases {
+    gap: 4px;
+  }
+  .practice-phases button,
+  .practice-phases span {
+    font-size: 0.75rem;
+    padding: 8px 12px;
+  }
+  .chapter-navigation {
+    gap: 8px;
+  }
+  .chapter-navigation h2 {
+    font-size: 1.25rem;
+  }
+  .chapter-navigation button span {
+    display: none;
+  }
+  .selection-bar {
+    padding: 12px;
+    gap: 8px;
+  }
+  .selection-bar > div {
+    flex-basis: 100%;
+  }
+  .selection-bar button {
+    flex: 1;
+    padding: 8px;
+  }
+  .resume-writing {
+    display: block;
+  }
+  .resume-writing button {
+    margin-top: 8px;
+  }
+  .project-dialog {
+    padding: 24px;
+  }
+}

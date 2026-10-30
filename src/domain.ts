@@ -1,3 +1,4 @@
+import type { MediaData } from "./media";
 export type Ref = `${number}:${number}:${number}`;
 export interface BibleBook {
   id: number;
@@ -63,7 +64,7 @@ export interface MemoryAnchor {
   visualId?: string;
 }
 export interface VisualAsset {
-  blob: Blob;
+  blob: MediaData;
   name: string;
 }
 export interface Collection {
@@ -93,20 +94,35 @@ export interface NotificationPreference {
   prompts: boolean;
   saturday: boolean;
   lastBackup?: number;
+  reading?: { ref: Ref; size: number };
 }
 export interface AudioAsset {
   name: string;
   refs: Ref[];
-  blob: Blob;
+  blob: MediaData;
   rights: string;
 }
 export interface BackupManifest {
   format: "word-within";
-  version: 1;
+  version: 1 | 2;
   created: number;
   records: unknown[];
 }
+export interface LocalDraft {
+  scope: "practice" | "reflection";
+  text: string;
+  updated: number;
+  refs: Ref[];
+  method?: string;
+  reference?: string;
+  hints?: number;
+  studyVisible?: boolean;
+  hiding?: number;
+  step?: number;
+  section?: string;
+}
 export interface RecordData {
+  draft: LocalDraft;
   project: MemoryProject;
   unit: MemoryUnit;
   review: ReviewState;
@@ -289,30 +305,60 @@ export function allRefs(books: BibleBook[], b: number, c?: number): Ref[] {
 }
 export function parseRefs(input: string, books: BibleBook[]): Ref[] {
   const refs: Ref[] = [];
+  const aliases: Record<string, string> = {
+    ps: "Psalms",
+    psalm: "Psalms",
+    psa: "Psalms",
+    jn: "John",
+    jhn: "John",
+    rom: "Romans",
+    jas: "James",
+    rev: "Revelation",
+    gen: "Genesis",
+    ex: "Exodus",
+    songofsongs: "Song of Solomon",
+  };
   for (const part of input
     .split(/[;,\n]/)
     .map((s) => s.trim())
     .filter(Boolean)) {
-    const book = [...books]
-      .sort((a, b) => b.name.length - a.name.length)
-      .find((b) => part.toLowerCase().startsWith(b.name.toLowerCase() + " "));
+    const match = part.match(
+      /^(.+?)\s*(\d+)(?::(\d+)(?:-(?:(\d+):)?(\d+))?)?$/,
+    );
+    if (!match) throw Error(`Invalid reference: ${part}`);
+    const name = match[1].toLowerCase().replace(/[.\s]/g, ""),
+      canonical = aliases[name]?.toLowerCase().replace(/\s/g, "") ?? name;
+    const book = books.find(
+      (b) => b.name.toLowerCase().replace(/\s/g, "") === canonical,
+    );
     if (!book)
       throw Error(
-        `Use full book names, for example John 3:16-18; Romans 8:1. Unknown: ${part}`,
+        `Use a Bible book name, for example John 3:16-18. Unknown: ${part}`,
       );
-    const m = part
-      .slice(book.name.length)
-      .trim()
-      .match(/^(\d+)(?::(\d+)(?:-(\d+))?)?$/);
-    if (!m) throw Error(`Invalid reference: ${part}`);
-    const c = Number(m[1]),
-      ch = book.chapters[c - 1];
-    if (!ch) throw Error(`Unknown chapter: ${part}`);
-    const start = m[2] ? Number(m[2]) : 1,
-      end = m[3] ? Number(m[3]) : m[2] ? start : ch.length;
-    if (start < 1 || end > ch.length || end < start)
+    const chapter = +match[2],
+      first = book.chapters[chapter - 1];
+    if (!first) throw Error(`Unknown chapter: ${part}`);
+    const start = match[3] ? +match[3] : 1,
+      endChapter = match[4] ? +match[4] : chapter,
+      last = book.chapters[endChapter - 1],
+      end = match[5] ? +match[5] : match[3] ? start : first.length;
+    if (
+      !last ||
+      endChapter < chapter ||
+      start < 1 ||
+      start > first.length ||
+      end < 1 ||
+      end > last.length ||
+      (endChapter === chapter && end < start)
+    )
       throw Error(`Unknown verse range: ${part}`);
-    for (let v = start; v <= end; v++) refs.push(`${book.id}:${c}:${v}`);
+    for (let c = chapter; c <= endChapter; c++)
+      for (
+        let v = c === chapter ? start : 1;
+        v <= (c === endChapter ? end : book.chapters[c - 1].length);
+        v++
+      )
+        refs.push(`${book.id}:${c}:${v}`);
   }
   if (!refs.length) throw Error("Select at least one passage.");
   return [...new Set(refs)];

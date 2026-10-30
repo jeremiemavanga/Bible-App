@@ -157,7 +157,17 @@ test("projects, six methods, topics, and licensed audio controls", async ({
   await expect(page.locator("audio")).toHaveJSProperty("playbackRate", 1.5);
   await page.getByLabel("Repeat", { exact: true }).selectOption("track");
   await expect(page.locator("audio")).toHaveJSProperty("loop", true);
-  await page.locator("audio").evaluate((a: HTMLAudioElement) => a.play());
+  if (
+    await page
+      .getByRole("button", { name: "Pause Scripture audio", exact: true })
+      .isVisible()
+  )
+    await page
+      .getByRole("button", { name: "Pause Scripture audio", exact: true })
+      .click();
+  await page
+    .getByRole("button", { name: "Play Scripture audio", exact: true })
+    .click();
   await navigate(page, "Today");
   await expect(
     page.getByRole("complementary", { name: "Current Scripture recording" }),
