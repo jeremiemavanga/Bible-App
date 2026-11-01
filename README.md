@@ -4,6 +4,9 @@ A private, offline-first Scripture memorization PWA built against the approved e
 
 ## Latest improvements
 
+[Memory tracking and reading update 1.1.0](docs/MEMORY-TRACKING-UPDATE.md): visible learning, personal memorized marks, shared status maps, gradual review intervals, subtle word difficulty and optional insights, plus direct Bible navigation. Existing progress stays on the same installation.
+
+
 [Automatic first-letter practice](docs/AUTOMATIC-PRACTICE.md) is now the default: one tap chooses the passage and exercise, words appear as you type their initials, cues decrease automatically, and results save without a grading form. Learning steps and the remaining queue resume offline. Full-word checking and all six manual methods remain optional.
 
 Read [the Scripture experience update](docs/SCRIPTURE-EXPERIENCE.md): a calmer continuous reader, surrounding-chapter context, shorter first sessions, optional reflection and prayer, private spoken self-assessment, and retention stages that require successful recall across days and weeks. Existing review histories are preserved and old stage summaries are rebuilt from that evidence.
@@ -37,7 +40,7 @@ The test runner starts its own production preview. Unit tests also verify 66 boo
 
 ## Test through GitHub Pages
 
-Follow [the step-by-step GitHub Pages guide](docs/GITHUB-PAGES.md). A manual deployment workflow builds with `--base=/Bible-App/` and uploads only the static app. Enable GitHub Actions as the Pages source, then run **Deploy app to GitHub Pages**. No site publication is claimed until that workflow succeeds.
+Follow [the step-by-step GitHub Pages guide](docs/GITHUB-PAGES.md). The deployment workflow runs after pushes to `main` (or manually), builds with `--base=/Bible-App/` and uploads only the static app. Enable GitHub Actions as the Pages source, then pushes to `main` run **Deploy app to GitHub Pages** automatically. No site publication is claimed until that workflow succeeds.
 
 ## Workflows
 

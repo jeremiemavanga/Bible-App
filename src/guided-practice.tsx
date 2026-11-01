@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { markMemorized, wordDifficulty } from "./memory";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import {
   label,
@@ -67,7 +68,7 @@ export function GuidedPractice({
     guided: initial,
     hints: 0,
   });
-  const guide = draft.value.guided ?? initial;
+  const guide: GuidedDraft = draft.value.guided ?? initial;
   useEffect(() => {
     if (
       draft.ready &&
@@ -78,9 +79,19 @@ export function GuidedPractice({
   }, [draft.ready, remaining]);
   const expected = refs.map((ref) => textFor(books, ref)).join(" ");
   const words = useMemo(() => guidedWords(expected), [expected]);
+  const heatLevels = useMemo(
+    () =>
+      refs.flatMap((ref) =>
+        guidedWords(textFor(books, ref)).map(
+          (_, index) => wordDifficulty(records, ref, index).level,
+        ),
+      ),
+    [records, books, refs],
+  );
   const [busy, setBusy] = useState(false),
     [error, setError] = useState(""),
     [mismatch, setMismatch] = useState(false);
+  const [undoMark, setUndoMark] = useState<null | (() => Promise<void>)>(null);
   const working = useRef(false);
   const input = useRef<HTMLInputElement>(null);
   const heading = useRef<HTMLHeadingElement>(null);
@@ -113,6 +124,7 @@ export function GuidedPractice({
     accuracy: number,
     text = draft.value.text,
     extraHint = false,
+    tracking: GuidedDraft = guide,
   ) => {
     if (working.current) return;
     working.current = true;
@@ -122,7 +134,6 @@ export function GuidedPractice({
       const hints =
         (draft.value.hints ?? 0) +
         Number(extraHint) +
-        (guide.mistakes ? 1 : 0) +
         (guide.mode === "learn" ? 1 : 0);
       const saved = await saveAutomaticReview({
         books,
@@ -131,7 +142,27 @@ export function GuidedPractice({
         at: Date.now(),
         recall: text,
         evidence,
-        accuracy,
+        wordingConfirmed: evidence === "self" ? accuracy === 1 : undefined,
+        accuracy:
+          evidence === "self"
+            ? Math.min(
+                accuracy,
+                1 -
+                  (tracking.missedWords?.length ??
+                    (tracking.mistakes ? 1 : 0)) /
+                    words.length,
+              )
+            : accuracy,
+        wordResults:
+          evidence === "typed" ||
+          tracking.wordTrackingIncomplete ||
+          (tracking.mistakes > 0 && tracking.missedWords === undefined)
+            ? undefined
+            : words.map((_, index) => ({
+                index,
+                missed: tracking.missedWords?.includes(index) ?? false,
+                hinted: tracking.hintedWords?.includes(index) ?? false,
+              })),
         hints,
         exercise:
           evidence === "typed"
@@ -164,6 +195,20 @@ export function GuidedPractice({
     const next = {
       ...guide,
       mistakes: guide.mistakes + Number(checked.mismatch),
+      wordTrackingIncomplete:
+        guide.wordTrackingIncomplete ||
+        (guide.mistakes > 0 && guide.missedWords === undefined),
+      missedWords: [
+        ...new Set([
+          ...(guide.missedWords ?? []),
+          ...(checked.mismatch
+            ? [Math.min(checked.accepted.length, words.length - 1)]
+            : []),
+        ]),
+      ],
+      hintedWords: [
+        ...new Set([...(guide.hintedWords ?? []), ...(hint ? [cursor] : [])]),
+      ],
     };
     setMismatch(checked.mismatch);
     draft.update({
@@ -179,6 +224,7 @@ export function GuidedPractice({
           Math.max(0, words.length / (words.length + next.mistakes)),
           checked.accepted,
           hint,
+          next,
         );
       } else
         draft.update({
@@ -273,32 +319,38 @@ export function GuidedPractice({
           >
             {words.map((word, i) => {
               const revealed = guide.phase === "follow" || i < cursor;
+              const heat = heatLevels[i];
               return (
-                <span
-                  key={i}
-                  className={
-                    "guided-word" +
-                    (i < cursor ? " entered" : "") +
-                    (i === cursor ? " current" : "")
-                  }
-                >
-                  {revealed ? (
-                    word.text
-                  ) : (
-                    <span
-                      role="img"
-                      aria-label={
-                        guide.phase === "cues"
-                          ? `Word ${i + 1} begins with ${word.initial}`
-                          : `Word ${i + 1} hidden`
-                      }
-                    >
-                      {guide.phase === "cues"
-                        ? word.initial.toUpperCase() + "···"
-                        : "···"}
-                    </span>
-                  )}
-                </span>
+                <Fragment key={i}>
+                  <span
+                    className={
+                      "guided-word heat-" +
+                      (guide.missedWords?.includes(i) ||
+                      guide.hintedWords?.includes(i)
+                        ? "hot"
+                        : heat) +
+                      (i < cursor ? " entered" : "") +
+                      (i === cursor ? " current" : "")
+                    }
+                  >
+                    {revealed ? (
+                      word.text
+                    ) : (
+                      <span
+                        role="img"
+                        aria-label={
+                          guide.phase === "cues"
+                            ? `Word ${i + 1} begins with ${word.initial}`
+                            : `Word ${i + 1} hidden`
+                        }
+                      >
+                        {guide.phase === "cues"
+                          ? word.initial.toUpperCase() + "···"
+                          : "···"}
+                      </span>
+                    )}
+                  </span>{" "}
+                </Fragment>
               );
             })}
           </div>
@@ -493,6 +545,31 @@ export function GuidedPractice({
             ? "Your place is saved on this device."
             : ""}
       </p>
+      <button
+        disabled={busy}
+        onClick={async () => {
+          try {
+            const undo = await markMemorized(refs);
+            await onSaved();
+            setUndoMark(() => undo);
+          } catch (cause) {
+            setError(String(cause));
+          }
+        }}
+      >
+        Mark as memorized
+      </button>
+      {undoMark && (
+        <button
+          onClick={async () => {
+            await undoMark();
+            setUndoMark(null);
+            await onSaved();
+          }}
+        >
+          Undo memorized mark
+        </button>
+      )}
       <details className="guided-options">
         <summary>More options</summary>
         {!["feedback", "confirm"].includes(guide.phase) && (

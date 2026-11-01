@@ -29,19 +29,14 @@ describe("evidence over time", () => {
   });
   it("requires due, spaced recalls and weeks of evidence for later stages", () => {
     let state = schedule(undefined, recall);
-    state = schedule(state, { ...recall, at: start + day });
-    expect(state.stage).toBe(2);
-    state = schedule(state, { ...recall, at: start + 4 * day });
-    expect(state.stage).toBe(3);
-    state = schedule(state, { ...recall, at: start + 11 * day });
-    expect(state.stage).toBe(3); // Two weeks have not elapsed.
-    const next = state.due;
-    state = schedule(state, { ...recall, at: start + 14 * day });
-    expect(state.stage).toBe(3); // An early rehearsal cannot replace the due review.
-    expect(state.due).toBe(next);
-    state = schedule(state, { ...recall, at: next });
-    expect(state.stage).toBe(4);
-    state = schedule(state, { ...recall, at: state.due });
+    expect(state.interval).toBe(1);
+    for (const interval of [2, 4, 7, 14, 30, 60]) {
+      const early = schedule(state, { ...recall, at: state.due - 1 });
+      expect(early.due).toBe(state.due);
+      state = schedule(state, { ...recall, at: state.due });
+      expect(state.interval).toBe(interval);
+      if (interval < 60) expect(state.stage).toBeLessThan(5);
+    }
     expect(state.stage).toBe(5);
     expect(
       state.lastSpacedAt! - state.learningStartedAt!,

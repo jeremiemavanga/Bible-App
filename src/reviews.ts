@@ -13,8 +13,10 @@ export function upgradedReviews(records: Entry[]): Entry<"review">[] {
   for (const record of records) {
     if (record.kind !== "review") continue;
     const history = attempts.get(record.data.id) ?? [];
+    if (record.data.schedulerVersion === 3) continue;
     if (
-      record.data.schedulerVersion === 2 &&
+      (record.data.schedulerVersion === 2 ||
+        record.data.schedulerVersion === 3) &&
       (!history.length || history.length === record.data.reviews)
     )
       continue;

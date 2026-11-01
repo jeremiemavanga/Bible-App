@@ -2,6 +2,16 @@ import { useEffect, useRef, useState } from "react";
 import { db } from "./db";
 import type { Entry, LocalDraft } from "./domain";
 
+const pendingDraftWrites = new Set<Promise<unknown>>();
+const failedDrafts = new Set<string>();
+export async function flushDrafts() {
+  while (pendingDraftWrites.size) await Promise.all([...pendingDraftWrites]);
+  if (failedDrafts.size)
+    throw Error(
+      "Your latest changes could not be saved. Try saving again before updating.",
+    );
+}
+
 // Writes are queued synchronously on each edit; navigation cannot cancel a debounce.
 export function useLocalDraft(key: string, initial: LocalDraft) {
   const [value, setValue] = useState(initial),
@@ -43,15 +53,21 @@ export function useLocalDraft(key: string, initial: LocalDraft) {
         db.records.put({ id: key, kind: "draft", data: next } as Entry),
       )
       .then(() => {
+        failedDrafts.delete(key);
         if (mounted.current && current.current === next) setStatus("saved");
       })
       .catch(() => {
+        failedDrafts.add(key);
         if (mounted.current) setStatus("error");
       });
+    const pending = chain.current;
+    pendingDraftWrites.add(pending);
+    void pending.finally(() => pendingDraftWrites.delete(pending));
   };
   const clear = async () => {
     await chain.current;
     await db.records.delete(key);
+    failedDrafts.delete(key);
     current.current = initial;
     if (mounted.current) {
       setValue(initial);

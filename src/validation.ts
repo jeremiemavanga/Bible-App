@@ -10,6 +10,12 @@ export function validRef(v: unknown): boolean {
   const [b, c, n] = v.split(":").map(Number);
   return b > 0 && c > 0 && n > 0 && n <= (verseCounts[b - 1]?.[c - 1] ?? 0);
 }
+const wordIndexes = (v: unknown) =>
+  v === undefined ||
+  (Array.isArray(v) &&
+    v.length <= 60000 &&
+    new Set(v).size === v.length &&
+    v.every((i) => Number.isInteger(i) && number(i, 0, 59999)));
 const refs = (v: unknown) =>
   Array.isArray(v) &&
   v.length > 0 &&
@@ -83,6 +89,10 @@ export function validateEntry(e: Entry) {
           d.guided.token.length <= 128 &&
           number(d.guided.minutes, 5, 190) &&
           number(d.guided.mistakes) &&
+          (d.guided.wordTrackingIncomplete === undefined ||
+            typeof d.guided.wordTrackingIncomplete === "boolean") &&
+          wordIndexes(d.guided.missedWords) &&
+          wordIndexes(d.guided.hintedWords) &&
           Array.isArray(d.guided.remaining) &&
           d.guided.remaining.length <= 256 &&
           d.guided.remaining.every(refs) &&
@@ -104,11 +114,16 @@ export function validateEntry(e: Entry) {
       refs(d.refs) && ["verse", "chapter", "passage"].includes(d.level),
     review: () =>
       texts(["id"]) &&
+      (d.markedAt === undefined || number(d.markedAt)) &&
+      (d.milestoneAt === undefined || number(d.milestoneAt)) &&
+      (d.relearning === undefined || typeof d.relearning === "boolean") &&
       numbers(["due", "interval", "reviews"]) &&
       Number.isInteger(d.stage) &&
       number(d.stage, 0, 5) &&
       number(d.accuracy, 0, 1) &&
-      (d.schedulerVersion === undefined || d.schedulerVersion === 2) &&
+      (d.schedulerVersion === undefined ||
+        d.schedulerVersion === 2 ||
+        d.schedulerVersion === 3) &&
       ["learningStartedAt", "lastSpacedAt", "lastReviewedAt"].every(
         (key) => d[key] === undefined || number(d[key]),
       ) &&
@@ -116,6 +131,19 @@ export function validateEntry(e: Entry) {
         ["typed", "self", "initials"].includes(d.evidence)),
     attempt: () =>
       texts(["unitId"]) &&
+      (d.wordResults === undefined ||
+        (Array.isArray(d.wordResults) &&
+          d.wordResults.length <= 60000 &&
+          new Set(d.wordResults.map((w: any) => w?.index)).size ===
+            d.wordResults.length &&
+          d.wordResults.every(
+            (w: any) =>
+              w &&
+              Number.isInteger(w.index) &&
+              number(w.index, 0, 59999) &&
+              typeof w.missed === "boolean" &&
+              typeof w.hinted === "boolean",
+          ))) &&
       numbers(["at", "hints"]) &&
       number(d.difficulty, 1, 3) &&
       number(d.self, 1, 4) &&
@@ -159,6 +187,10 @@ export function validateEntry(e: Entry) {
       (d.lastBackup === undefined || number(d.lastBackup)) &&
       (!d.reading ||
         (validRef(d.reading.ref) &&
+          (d.reading.recent === undefined ||
+            (Array.isArray(d.reading.recent) &&
+              d.reading.recent.length <= 8 &&
+              d.reading.recent.every(validRef))) &&
           number(d.reading.size, 22, 38) &&
           (d.reading.layout === undefined ||
             ["flow", "verses"].includes(d.reading.layout)))),

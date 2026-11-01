@@ -15,9 +15,9 @@ test("five destinations, calm home, local reader sizing and dedicated progress",
   await expect(
     page.getByRole("heading", { name: "Today's Scripture" }),
   ).toBeVisible();
-  await expect(
-    page.getByText("Established verses", { exact: true }),
-  ).toHaveCount(0);
+  await expect(page.getByText("Long-term verses", { exact: true })).toHaveCount(
+    0,
+  );
   const button = page.getByRole("button", {
     name: "Start practice",
     exact: false,
@@ -32,7 +32,7 @@ test("five destinations, calm home, local reader sizing and dedicated progress",
     page.getByRole("heading", { name: "Quiet, lasting growth" }),
   ).toBeVisible();
   await expect(
-    page.getByText("Established verses", { exact: true }),
+    page.getByText("Long-term verses", { exact: true }),
   ).toBeVisible();
   await expect(
     page.getByRole("heading", { name: "Your practice calendar" }),

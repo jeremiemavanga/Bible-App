@@ -40,6 +40,15 @@ export function automaticMode(
     .filter((e) => e.kind === "attempt")
     .filter((e) => e.data.unitId === unitId)
     .sort((a, b) => b.data.at - a.data.at)[0]?.data;
+  const declaration = records.find(
+    (e): e is Entry<"review"> => e.kind === "review" && e.data.id === unitId,
+  )?.data;
+  if (
+    declaration?.markedAt &&
+    !declaration.relearning &&
+    declaration.markedAt >= (latest?.at ?? 0)
+  )
+    return "recall";
   // A completed course gets a fresh recall check next time. A difficult
   // independent review gets more support, without asking the learner to plan it.
   if (latest?.exercise === "guided-learning") return "recall";

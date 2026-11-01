@@ -31,7 +31,10 @@ export interface ReviewState {
   interval: number;
   accuracy: number;
   reviews: number;
-  schedulerVersion?: 2;
+  schedulerVersion?: 2 | 3;
+  markedAt?: number;
+  relearning?: boolean;
+  milestoneAt?: number;
   learningStartedAt?: number;
   lastSpacedAt?: number;
   lastReviewedAt?: number;
@@ -47,6 +50,7 @@ export interface ReviewAttempt {
   transitionAccuracy: number;
   referenceAccuracy?: number;
   evidence?: "typed" | "self" | "initials";
+  wordResults?: { index: number; missed: boolean; hinted: boolean }[];
   exercise?: "guided-learning" | "initials-recall" | "written-recall";
 }
 export interface MemoryProject {
@@ -101,7 +105,12 @@ export interface NotificationPreference {
   prompts: boolean;
   saturday: boolean;
   lastBackup?: number;
-  reading?: { ref: Ref; size: number; layout?: "flow" | "verses" };
+  reading?: {
+    ref: Ref;
+    size: number;
+    layout?: "flow" | "verses";
+    recent?: Ref[];
+  };
 }
 export interface AudioAsset {
   name: string;
@@ -139,6 +148,9 @@ export interface GuidedDraft {
   remaining: Ref[][];
   minutes: number;
   mistakes: number;
+  missedWords?: number[];
+  hintedWords?: number[];
+  wordTrackingIncomplete?: boolean;
   outcome?: { accuracy: number; evidence: "typed" | "self" | "initials" };
 }
 export interface RecordData {
@@ -267,59 +279,59 @@ export function schedule(
       due: previous && old.due > attempt.at ? old.due : attempt.at + 0.5 * day,
       interval: previous && old.due > attempt.at ? old.interval : 0.5,
       reviews: old.reviews + 1,
-      schedulerVersion: 2,
+      schedulerVersion: 3,
       lastReviewedAt: attempt.at,
       evidence: "initials",
     };
   }
   const success =
-    attempt.accuracy >= 0.97 &&
+    attempt.accuracy === 1 &&
     attempt.self >= 3 &&
     attempt.hints === 0 &&
     attempt.difficulty <= 2;
   const learningStartedAt =
     old.learningStartedAt ?? (success ? attempt.at : undefined);
-  const lastSpacedAt = old.lastSpacedAt;
-  // Later stages need successful recalls across days, including at least
-  // six weeks for long-term retention. Early rehearsals keep the due date.
-  const minimumAge = [0, 0, 1, 4, 14, 45];
   const spaced =
     !previous ||
-    lastSpacedAt === undefined ||
-    (attempt.at >= old.due && attempt.at - lastSpacedAt >= day);
-  const promote =
+    (attempt.at >= old.due &&
+      (old.lastSpacedAt === undefined || attempt.at - old.lastSpacedAt >= day));
+  const ladder = [10 / 1440, 1, 2, 4, 7, 14, 30, 60, 90];
+  const advance =
+    spaced || (!!previous && attempt.at >= old.due && old.interval < 1);
+  const interval = success
+    ? !advance
+      ? old.interval
+      : (ladder.find((n) => n >= 1 && n > old.interval) ?? 90)
+    : (ladder.filter((n) => n < old.interval).at(-1) ?? ladder[0]);
+  const longTerm =
     success &&
     spaced &&
-    attempt.at - (learningStartedAt ?? attempt.at) >=
-      minimumAge[Math.min(5, old.stage + 1)] * day;
-  const stage = success
-    ? Math.min(5, old.stage + Number(promote))
-    : Math.max(
-        0,
-        old.stage - (attempt.accuracy < 0.7 || attempt.self === 1 ? 2 : 1),
-      );
-  const intervals = [0.25, 1, 3, 7, 30, 90];
-  const interval = success
-    ? !spaced
-      ? old.interval
-      : stage === 5
-        ? Math.min(365, Math.max(90, old.interval * 1.6))
-        : intervals[stage]
-    : attempt.hints
-      ? 0.5
-      : 0.25;
+    interval >= 60 &&
+    learningStartedAt !== undefined &&
+    attempt.at - learningStartedAt >= 45 * day;
+  const stage = !success
+    ? Math.max(0, old.stage - 1)
+    : !spaced
+      ? old.stage
+      : longTerm
+        ? 5
+        : Math.min(4, old.stage + 1);
   return {
+    ...old,
     id: attempt.unitId,
     stage,
-    due: success && previous && !spaced ? old.due : attempt.at + interval * day,
+    due:
+      success && previous && !advance ? old.due : attempt.at + interval * day,
     interval,
     accuracy: attempt.accuracy,
     reviews: old.reviews + 1,
-    schedulerVersion: 2,
+    schedulerVersion: 3,
     learningStartedAt,
-    lastSpacedAt: success && spaced ? attempt.at : lastSpacedAt,
+    lastSpacedAt: success && spaced ? attempt.at : old.lastSpacedAt,
     lastReviewedAt: attempt.at,
     evidence: attempt.evidence ?? "typed",
+    relearning: !success ? true : longTerm ? false : old.relearning,
+    milestoneAt: longTerm ? (old.milestoneAt ?? attempt.at) : old.milestoneAt,
   };
 }
 export function retention(s: ReviewState, now: number) {

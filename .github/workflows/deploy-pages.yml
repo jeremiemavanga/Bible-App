@@ -1,8 +1,10 @@
 name: Deploy app to GitHub Pages
 
-# Run manually after Settings > Pages > Source is set to GitHub Actions.
+# Publish verified main updates to the existing GitHub Pages installation.
 on:
   workflow_dispatch:
+  push:
+    branches: [main]
 
 permissions:
   contents: read

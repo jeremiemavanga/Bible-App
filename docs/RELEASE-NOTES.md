@@ -1,3 +1,7 @@
+# 1.1.0 — 1 November 2026
+
+See [memory tracking and reading update](MEMORY-TRACKING-UPDATE.md) for behavior, compatibility and installation details.
+
 # Version 1.0 implementation — validation report
 
 Validated in the cloud workspace on October 29, 2026. The app is implemented and the local development/production workflows run. This is **not** a claim of physical Apple-device certification, a deployed website, or cleared distribution of third-party translations.
@@ -60,3 +64,11 @@ Screenshots of the production UI are saved as `validated-chromium.png`, `validat
 ## Reusable cloud setup
 
 Saved `install_script` and `start_skill`, plus the additive browser-download domains, in the cloud environment draft. The installation commands were executed successfully in this instance. To activate the saved configuration/snapshot, review and save it in environment settings, then publish the environment. Publication and validation in a newly restored task have not been performed here.
+
+## 1.1.0 local verification
+
+- Production TypeScript/Vite/PWA build passed; KJV integrity and notices checks passed.
+- 53 unit checks passed, including gradual scheduler recovery, exact-accuracy boundaries, unique memory counts, manual marking/undo, encrypted transfer and incomplete word history.
+- 81 browser checks passed across desktop Chromium, iPhone-size Chromium and iPad-size Chromium, including offline recovery, reader navigation, contextual marking, accessible interfaces, portable media and word tracking.
+- Native WebKit is not installed on this cloud host. GitHub verification installs and runs WebKit before the Pages deployment. Local layout emulation does not certify physical Safari devices.
+- GitHub API and Pages HTTP access are blocked from this host; a successful source push can trigger deployment, but deployment completion must be read in GitHub Actions.

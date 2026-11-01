@@ -2521,3 +2521,157 @@ button svg.lucide {
     margin-top: 12px;
   }
 }
+
+/* Practice remains flowing Scripture text; numerical detail belongs in Progress. */
+.guided-word.heat-warm {
+  color: #725849;
+}
+.guided-word.heat-hot {
+  color: #93461d;
+}
+.guided-word {
+  background: transparent;
+  border-radius: 0;
+}
+.memory-marker {
+  display: inline-block;
+  min-width: 1em;
+  font-size: 0.8em;
+  margin-right: 0.25em;
+  color: #55564f;
+}
+.memory-marker.status-learning {
+  color: #93461d;
+}
+.memory-marker.status-memorized,
+.memory-marker.status-long-term {
+  color: #20211f;
+  font-weight: 700;
+}
+.memory-marker.status-long-term {
+  border: 1px solid currentColor;
+  border-radius: 50%;
+  text-align: center;
+}
+.selected-verse .verse-words {
+  background: #20211f12;
+}
+.memory-verse-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(44px, 1fr));
+  gap: 8px;
+  margin: 16px 0;
+}
+.memory-verse-grid button {
+  border-radius: 50%;
+  padding: 8px;
+  min-height: 44px;
+}
+.memory-verse-grid .map-learning {
+  border-color: #93461d;
+}
+.memory-verse-grid .map-memorized,
+.memory-verse-grid .map-long-term {
+  background: #20211f;
+  color: #e5e2dc;
+}
+.memory-verse-grid .map-long-term {
+  outline: 1px solid #20211f;
+  outline-offset: 2px;
+}
+.practice-insights {
+  margin-block: 24px;
+}
+
+.guided-words {
+  display: block;
+  line-height: 1.9;
+}
+.guided-word {
+  display: inline;
+  min-width: 0;
+  padding: 0;
+  border-bottom: 0;
+}
+.guided-word.current {
+  text-decoration: underline;
+  text-decoration-color: #a5a097;
+  text-underline-offset: 5px;
+}
+
+.reader button.verse-words {
+  display: inline;
+  font: inherit;
+  line-height: inherit;
+  letter-spacing: inherit;
+  color: inherit;
+  text-align: left;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  min-height: 0;
+  user-select: text;
+}
+.memory-marker-wrap {
+  display: inline;
+}
+button.memory-marker {
+  border: 0;
+  background: transparent;
+  padding: 0 4px;
+  min-width: 32px;
+  min-height: 44px;
+  vertical-align: baseline;
+}
+.memory-marker-detail {
+  display: block;
+  background: var(--surface, #f1eee8);
+  border: 1px solid #bbb7ae;
+  padding: 12px;
+  margin: 8px 0;
+  font-size: 0.85rem;
+  line-height: 1.7;
+}
+.memory-marker-detail strong,
+.memory-marker-detail > span {
+  display: block;
+}
+.picker-book-list {
+  display: grid;
+  gap: 4px;
+  margin-top: 16px;
+}
+.picker-book-list button {
+  text-align: left;
+}
+.picker-number-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(64px, 1fr));
+  gap: 8px;
+  margin-top: 20px;
+}
+
+.chapter-navigation h2 > button {
+  font: inherit;
+  letter-spacing: inherit;
+  background: transparent;
+  border: 0;
+  padding: 0 4px;
+}
+.reader .verse-words {
+  display: inline;
+  font: inherit;
+  line-height: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+@media (max-width: 700px) {
+  .heading:has(+ .chapter-navigation) > .eyebrow {
+    display: none;
+  }
+  .heading:has(+ .chapter-navigation) {
+    margin-bottom: 8px;
+  }
+}

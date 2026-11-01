@@ -1,3 +1,16 @@
+import { BiblePicker } from "./bible-picker";
+import {
+  PracticeInsights,
+  ProjectMap,
+  MemoryMarker,
+} from "./practice-insights";
+import {
+  memoryStatus,
+  memoryCounts,
+  markMemorized,
+  wordDifficulty,
+  removeManualMark,
+} from "./memory";
 import { packMedia, mediaBlob } from "./media";
 import React, {
   useState,
@@ -65,7 +78,7 @@ import {
   adjacentChapter,
   type PracticeItem,
 } from "./learning";
-import { useLocalDraft } from "./drafts";
+import { flushDrafts, useLocalDraft } from "./drafts";
 import { GuidedPractice } from "./guided-practice";
 import { automaticQueue, passageId, reviewFor } from "./automatic";
 import { validTranslation } from "./validation";
@@ -404,7 +417,17 @@ function App() {
             {update && (
               <p>
                 An app update is ready. Save your work and{" "}
-                <button onClick={() => void updateSW(true)}>reload</button>.
+                <button
+                  onClick={() =>
+                    void run(async () => {
+                      await flushDrafts();
+                      await updateSW(true);
+                    })
+                  }
+                >
+                  Update app
+                </button>
+                .
               </p>
             )}
           </div>
@@ -660,7 +683,13 @@ function Today(c: Ctx) {
     projects = c.records.filter((e) => e.kind === "project"),
     primary = projects.find((e) => e.data.primary),
     attempts = c.records.filter((e) => e.kind === "attempt"),
-    mastered = reviews.filter((r) => r.stage >= 3 && r.id.startsWith("verse:")),
+    mastered = reviews.filter(
+      (r) =>
+        r.id.startsWith("verse:") &&
+        ["Memorized", "Long-term"].includes(
+          memoryStatus(c.records, r.id.slice(6) as Ref),
+        ),
+    ),
     weak = [...reviews].sort((a, b) => a.accuracy - b.accuracy).slice(0, 5);
   const unitFor = (key: string) =>
     c.records.filter((e) => e.kind === "unit").find((e) => e.id === key)?.data
@@ -685,11 +714,10 @@ function Today(c: Ctx) {
     )
     .sort((a, b) => b.data.updated - a.data.updated)[0];
   const currentRef = draft?.data.refs[0] ?? current?.[0] ?? c.refs[0];
-  const completion = primary
-    ? primary.data.refs.filter((r) =>
-        mastered.some((s) => s.id === "verse:" + r),
-      ).length
-    : 0;
+  const projectProgress = primary
+    ? memoryCounts(c.records, primary.data.refs)
+    : null;
+  const completion = projectProgress?.started ?? 0;
 
   return (
     <>
@@ -759,7 +787,10 @@ function Today(c: Ctx) {
                   max={primary.data.refs.length}
                 />
                 <small>
-                  {completion} of {primary.data.refs.length} verses taking root
+                  {completion} of {primary.data.refs.length} started ·{" "}
+                  {projectProgress?.learning} learning ·{" "}
+                  {projectProgress?.memorized} memorized ·{" "}
+                  {projectProgress?.long} long-term
                 </small>
               </>
             )}
@@ -955,6 +986,18 @@ function Today(c: Ctx) {
 }
 
 function Progress(c: Ctx) {
+  const verseRefs = [
+    ...new Set(
+      c.records.flatMap((e) =>
+        e.kind === "review" && e.data.id.startsWith("verse:")
+          ? [e.data.id.slice(6) as Ref]
+          : e.kind === "attempt" && e.data.unitId.startsWith("verse:")
+            ? [e.data.unitId.slice(6) as Ref]
+            : [],
+      ),
+    ),
+  ];
+  const counts = memoryCounts(c.records, verseRefs);
   const reviews = c.records
       .filter((e) => e.kind === "review")
       .map((e) => e.data),
@@ -966,7 +1009,13 @@ function Progress(c: Ctx) {
       .filter(
         (e) => e.data.evidence !== "self" && e.data.evidence !== "initials",
       ),
-    mastered = reviews.filter((r) => r.stage >= 3 && r.id.startsWith("verse:")),
+    mastered = reviews.filter(
+      (r) =>
+        r.id.startsWith("verse:") &&
+        ["Memorized", "Long-term"].includes(
+          memoryStatus(c.records, r.id.slice(6) as Ref),
+        ),
+    ),
     weak = [...reviews].sort((a, b) => a.accuracy - b.accuracy).slice(0, 5);
   const unitFor = (key: string) =>
     c.records.filter((e) => e.kind === "unit").find((e) => e.id === key)?.data
@@ -983,17 +1032,16 @@ function Progress(c: Ctx) {
       </Heading>
       <div className="grid stats">
         <section>
-          <strong>{mastered.length}</strong>
+          <strong>{counts.memorized}</strong>
           <span>Verses memorized</span>
         </section>
         <section>
-          <strong>
-            {
-              reviews.filter((r) => r.stage >= 4 && r.id.startsWith("verse:"))
-                .length
-            }
-          </strong>
-          <span>Established verses</span>
+          <strong>{counts.long}</strong>
+          <span>Long-term verses</span>
+        </section>
+        <section>
+          <strong>{counts.learning}</strong>
+          <span>Learning verses</span>
         </section>
         <section>
           <strong>
@@ -1012,9 +1060,11 @@ function Progress(c: Ctx) {
         <summary>How lasting recall is measured</summary>
         <p>
           Later stages require successful, unassisted recalls at least a day
-          apart and when a review is due. Memorized requires at least four days
-          of evidence, Established at least two weeks, and Long-term retained at
-          least 45 days. Every stage remains in review.
+          apart and when a review is due. Memorized means marked by you or
+          earned through long-term recall. Long-term requires at least 45 days
+          of spaced evidence. Mistakes return a verse to Learning and reduce its
+          interval one step; accurate due recalls increase it one step. Every
+          stage remains in review.
         </p>
         <p>
           Spoken and first-letter recall can use your own assessment. Typed
@@ -1034,24 +1084,48 @@ function Progress(c: Ctx) {
           probability of remembering.
         </p>
       </details>
+      <PracticeInsights books={c.books} records={c.records} />
+      <section>
+        <h2>Next verse reviews</h2>
+        {reviews
+          .filter((r) => r.id.startsWith("verse:"))
+          .sort((a, b) => a.due - b.due)
+          .slice(0, 30)
+          .map((r) => (
+            <p key={r.id}>
+              {label(c.books, r.id.slice(6) as Ref)} ·{" "}
+              {memoryStatus(c.records, r.id.slice(6) as Ref)} ·{" "}
+              {new Date(r.due).toLocaleString()} ·{" "}
+              {r.interval < 1
+                ? Math.round(r.interval * 24 * 60) + " minutes"
+                : r.interval + " days"}
+            </p>
+          ))}
+      </section>
       <div className="grid two">
         <section>
           <p className="eyebrow">YOUR MEMORY PROJECTS</p>
           <h2>At your pace</h2>
           {projects.length ? (
             projects.map((p) => {
-              const done = p.data.refs.filter((r) =>
-                mastered.some((s) => s.id === "verse:" + r),
-              ).length;
+              const summary = memoryCounts(c.records, p.data.refs);
+              const done = summary.memorized;
               return (
                 <div key={p.id} className="projectline">
                   <div className="row">
                     <b>{p.data.name}</b>
                     <small>
-                      {done} / {p.data.refs.length} verses
+                      {summary.started} / {p.data.refs.length} started ·{" "}
+                      {summary.learning} learning · {done} memorized ·{" "}
+                      {summary.long} long-term
                     </small>
                   </div>
-                  <progress value={done} max={p.data.refs.length} />
+                  <progress value={summary.started} max={p.data.refs.length} />
+                  <ProjectMap
+                    books={c.books}
+                    records={c.records}
+                    refs={p.data.refs}
+                  />
                   <button
                     onClick={() => {
                       c.startDaily(p.data.refs);
@@ -1143,6 +1217,39 @@ function Progress(c: Ctx) {
   );
 }
 function Bible(c: Ctx) {
+  const [undoMark, setUndoMark] = useState<null | (() => Promise<void>)>(null);
+  const [showMarkers, setShowMarkers] = useState(true);
+  const [picker, setPicker] = useState(false);
+
+  const [jump, setJump] = useState<Ref | null>(c.prefs.reading?.ref ?? null);
+  const [readerVerse, setReaderVerse] = useState(
+    Number(c.prefs.reading?.ref.split(":")[2] ?? 1),
+  );
+  const [recent, setRecent] = useState<Ref[]>(c.prefs.reading?.recent ?? []);
+  const swipeStart = useRef<{ x: number; y: number } | null>(null);
+  const swiped = useRef(false);
+  useEffect(() => {
+    if (jump)
+      document
+        .getElementById("verse-" + jump)
+        ?.scrollIntoView({ block: "center" });
+  }, [jump]);
+  const toggleVerse = (ref: Ref) =>
+    setSelected((previous) => {
+      if (previous.length === 1 && previous[0] !== ref) {
+        const chapter = ref.split(":").slice(0, 2).join(":");
+        if (previous[0].startsWith(chapter + ":")) {
+          const [a, b] = [+previous[0].split(":")[2], +ref.split(":")[2]].sort(
+            (a, b) => a - b,
+          );
+          return Array.from(
+            { length: b - a + 1 },
+            (_, i) => (chapter + ":" + (a + i)) as Ref,
+          );
+        }
+      }
+      return previous.includes(ref) ? previous.filter((v) => v !== ref) : [ref];
+    });
   const [book, setBook] = useState(
       Number((c.prefs.reading?.ref ?? c.refs[0]).split(":")[0]),
     ),
@@ -1191,7 +1298,8 @@ function Bible(c: Ctx) {
     setReaderStatus("Saving reading position…");
     void updatePreferences({
       reading: {
-        ref: `${book}:${chapter}:1`,
+        ref: `${book}:${chapter}:${Math.min(readerVerse, c.books[book - 1].chapters[chapter - 1].length)}`,
+        recent,
         size: readerSize,
         layout: readerLayout,
       },
@@ -1205,12 +1313,13 @@ function Bible(c: Ctx) {
     return () => {
       active = false;
     };
-  }, [book, chapter, readerSize, readerLayout]);
+  }, [book, chapter, readerVerse, readerSize, readerLayout, recent]);
   const moveChapter = (direction: 1 | -1) => {
     const next = adjacentChapter(c.books, book, chapter, direction);
     if (!next) return;
     setBook(next.book);
     setChapter(next.chapter);
+    setReaderVerse(1);
     setQuery("");
     setSelected([]);
     setResultPage(0);
@@ -1240,8 +1349,10 @@ function Bible(c: Ctx) {
   } else results = allRefs(c.books, book, chapter);
   if (status !== "all")
     results = results.filter((r) => {
-      const s = reviewStages.get("verse:" + r) ?? 0;
-      return status === "new" ? s === 0 : s >= 3;
+      const state = memoryStatus(c.records, r);
+      return status === "new"
+        ? state === "Not started"
+        : ["Memorized", "Long-term"].includes(state);
     });
   const translation = translations.find((t) => t.id === compare)?.data;
   const selection = selected.length
@@ -1266,8 +1377,14 @@ function Bible(c: Ctx) {
         </button>
         <div>
           <p className="eyebrow">KING JAMES VERSION</p>
-          <h2>
-            {c.books[book - 1].name} {chapter}
+          <h2 aria-label={`${c.books[book - 1].name} ${chapter}`}>
+            <button
+              onClick={() => setPicker(true)}
+              aria-label="Choose book chapter and verse"
+            >
+              {c.books[book - 1].name} {chapter}
+              <span aria-hidden="true"> ▾</span>
+            </button>
           </h2>
         </div>
         <button
@@ -1279,6 +1396,25 @@ function Bible(c: Ctx) {
           <ChevronRight size={20} aria-hidden="true" />
         </button>
       </div>
+      {picker && (
+        <BiblePicker
+          books={c.books}
+          recent={recent}
+          onClose={() => setPicker(false)}
+          onChoose={(ref) => {
+            const [b, ch, v] = ref.split(":").map(Number);
+            setBook(b);
+            setChapter(ch);
+            setReaderVerse(v);
+            setRecent((values) =>
+              [ref, ...values.filter((r) => r !== ref)].slice(0, 8),
+            );
+            setQuery("");
+            setJump(ref);
+            setPicker(false);
+          }}
+        />
+      )}
       <section className={"bible-surface" + (focus ? " focused-reader" : "")}>
         <details className="reader-controls reader-navigation-tools">
           <summary>Choose passage or search</summary>
@@ -1341,6 +1477,9 @@ function Bible(c: Ctx) {
           <p className="reader-status" role="status">
             {readerStatus}
           </p>
+          <button onClick={() => setShowMarkers(!showMarkers)}>
+            {showMarkers ? "Hide memory markers" : "Show memory markers"}
+          </button>
           <div className="row reader-options">
             <label>
               Reading layout
@@ -1454,6 +1593,17 @@ function Bible(c: Ctx) {
               </small>
             </div>
             <button
+              onClick={() =>
+                void c.run(async () => {
+                  setUndoMark(() => null);
+                  const undo = await markMemorized(selection);
+                  setUndoMark(() => undo);
+                }, "Marked as memorized.")
+              }
+            >
+              Mark as memorized
+            </button>
+            <button
               className="primary"
               onClick={() => {
                 c.startDaily(selection);
@@ -1501,6 +1651,18 @@ function Bible(c: Ctx) {
             </button>
           </div>
         )}
+        {undoMark && (
+          <button
+            onClick={() =>
+              void c.run(async () => {
+                await undoMark();
+                setUndoMark(null);
+              }, "Marking undone.")
+            }
+          >
+            Undo memorized mark
+          </button>
+        )}
         {referenceSearch && results.length > 0 && (
           <button
             className="context-link"
@@ -1521,6 +1683,32 @@ function Bible(c: Ctx) {
               "--scripture-size": `${readerSize / 16}rem`,
             } as React.CSSProperties
           }
+          onTouchStart={(e) => {
+            const t = e.touches[0];
+            swipeStart.current = { x: t.clientX, y: t.clientY };
+            swiped.current = false;
+          }}
+          onTouchEnd={(e) => {
+            const start = swipeStart.current,
+              t = e.changedTouches[0];
+            swipeStart.current = null;
+            if (
+              start &&
+              Math.abs(t.clientX - start.x) > 80 &&
+              Math.abs(t.clientX - start.x) >
+                Math.abs(t.clientY - start.y) * 1.8
+            ) {
+              swiped.current = true;
+              moveChapter(t.clientX < start.x ? 1 : -1);
+            }
+          }}
+          onClickCapture={(e) => {
+            if (swiped.current) {
+              e.preventDefault();
+              e.stopPropagation();
+              swiped.current = false;
+            }
+          }}
           className={focus ? "reader quiet" : "reader"}
         >
           {readerLayout === "flow" && !translation ? (
@@ -1530,28 +1718,49 @@ function Bible(c: Ctx) {
                 .map((ref) => (
                   <React.Fragment key={ref}>
                     <span
+                      id={"verse-" + ref}
                       className={
                         "verse-inline" +
                         (selected.includes(ref) ? " selected-verse" : "")
                       }
                     >
+                      {showMarkers && (
+                        <MemoryMarker
+                          books={c.books}
+                          records={c.records}
+                          verseRef={ref}
+                          onRemove={(ref) =>
+                            void c.run(
+                              () => removeManualMark(ref),
+                              "Manual mark removed; review history retained.",
+                            )
+                          }
+                        />
+                      )}
                       <button
                         className="verse-number"
                         aria-label={`Select ${label(c.books, ref)}`}
                         aria-pressed={selected.includes(ref)}
-                        onClick={() =>
-                          setSelected(
-                            selected.includes(ref)
-                              ? selected.filter((value) => value !== ref)
-                              : [...selected, ref],
-                          )
-                        }
+                        onClick={() => toggleVerse(ref)}
                       >
                         <span aria-hidden="true">
                           {search ? label(c.books, ref) : ref.split(":")[2]}
                         </span>
                       </button>{" "}
-                      <span className="verse-words">
+                      <span
+                        role="button"
+                        tabIndex={0}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter" || event.key === " ") {
+                            event.preventDefault();
+                            toggleVerse(ref);
+                          }
+                        }}
+                        className="verse-words"
+                        aria-label={`Select text of ${label(c.books, ref)}. ${textFor(c.books, ref)}`}
+                        aria-pressed={selected.includes(ref)}
+                        onClick={() => toggleVerse(ref)}
+                      >
                         {textFor(c.books, ref)}
                       </span>
                     </span>{" "}
@@ -1574,6 +1783,19 @@ function Bible(c: Ctx) {
                         setSelected(next);
                         if (next.length) c.select(next);
                       }}
+                    />
+                  )}
+                  {showMarkers && (
+                    <MemoryMarker
+                      books={c.books}
+                      records={c.records}
+                      verseRef={r}
+                      onRemove={(ref) =>
+                        void c.run(
+                          () => removeManualMark(ref),
+                          "Manual mark removed; review history retained.",
+                        )
+                      }
                     />
                   )}
                   <small>{label(c.books, r)} · KJV</small>
@@ -1843,8 +2065,17 @@ function Projects(c: Ctx) {
               {p.data.primary && <span className="pill">PRIMARY</span>}
             </h2>
             <p>
-              {p.data.refs.length} verses · {p.data.kind}
+              {p.data.refs.length} verses · {p.data.kind} ·{" "}
+              {memoryCounts(c.records, p.data.refs).started} started ·{" "}
+              {memoryCounts(c.records, p.data.refs).learning} learning ·{" "}
+              {memoryCounts(c.records, p.data.refs).memorized} memorized ·{" "}
+              {memoryCounts(c.records, p.data.refs).long} long-term
             </p>
+            <ProjectMap
+              books={c.books}
+              records={c.records}
+              refs={p.data.refs}
+            />
             <div className="row">
               <button
                 onClick={() => {

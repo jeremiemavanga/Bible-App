@@ -2,13 +2,14 @@ import { db, type WordDB } from "./db";
 import {
   allRefs,
   grade,
+  textFor,
   schedule,
   type BibleBook,
   type Ref,
   type ReviewAttempt,
 } from "./domain";
 import { gradePassage } from "./learning";
-import { passageId } from "./automatic";
+import { guidedWords, passageId } from "./automatic";
 
 export async function saveAutomaticReview(
   {
@@ -21,6 +22,8 @@ export async function saveAutomaticReview(
     accuracy,
     hints,
     exercise,
+    wordResults,
+    wordingConfirmed,
   }: {
     books: BibleBook[];
     refs: Ref[];
@@ -30,6 +33,8 @@ export async function saveAutomaticReview(
     evidence: "typed" | "self" | "initials";
     accuracy: number;
     hints: number;
+    wordingConfirmed?: boolean;
+    wordResults?: { index: number; missed: boolean; hinted: boolean }[];
     exercise: NonNullable<ReviewAttempt["exercise"]>;
   },
   database: WordDB = db,
@@ -63,11 +68,49 @@ export async function saveAutomaticReview(
         transitions: number,
         level: "verse" | "chapter" | "passage",
       ) => {
+        const offset = refs
+          .slice(0, refs.indexOf(unitRefs[0]))
+          .reduce((n, ref) => n + guidedWords(textFor(books, ref)).length, 0);
+        const localWords =
+          level === "verse"
+            ? wordResults
+                ?.filter(
+                  (w) =>
+                    w.index >= offset &&
+                    w.index <
+                      offset + guidedWords(textFor(books, unitRefs[0])).length,
+                )
+                .map((w) => ({ ...w, index: w.index - offset }))
+            : undefined;
+        const globalHints = wordResults
+          ? Math.max(0, hints - wordResults.filter((w) => w.hinted).length)
+          : hints;
+        const localHints = localWords
+          ? localWords.filter((w) => w.hinted).length + globalHints
+          : hints;
+        if (
+          evidence !== "typed" &&
+          localWords?.length ===
+            guidedWords(textFor(books, unitRefs[0])).length &&
+          localWords.length > 0 &&
+          exercise === "initials-recall"
+        )
+          score =
+            wordingConfirmed === false
+              ? Math.min(
+                  0.65,
+                  1 -
+                    localWords.filter((w) => w.missed).length /
+                      localWords.length,
+                )
+              : 1 -
+                localWords.filter((w) => w.missed).length / localWords.length;
         const attempt: ReviewAttempt = {
           unitId,
           at,
           accuracy: score,
-          hints,
+          hints: localHints,
+          wordResults: localWords,
           evidence,
           exercise,
           difficulty: score >= 0.97 ? 2 : 3,

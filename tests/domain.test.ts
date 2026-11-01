@@ -103,7 +103,7 @@ describe("deterministic lifelong scheduler", () => {
     );
     expect(
       schedule({ ...prior, stage: 4 }, { ...attempt, accuracy: 0.4 }).stage,
-    ).toBe(2);
+    ).toBe(3);
   });
   it("carries missed reviews forward without duplicate debt or punishment", () => {
     const prior = schedule(undefined, attempt);
