@@ -4,8 +4,9 @@ A private, offline-first Scripture memorization PWA built against the approved e
 
 ## Latest improvements
 
-[Memory tracking and reading update 1.1.0](docs/MEMORY-TRACKING-UPDATE.md): visible learning, personal memorized marks, shared status maps, gradual review intervals, subtle word difficulty and optional insights, plus direct Bible navigation. Existing progress stays on the same installation.
+[Practice focus and reference recall 1.2.0](docs/FOCUS-REFERENCE-UPDATE.md): a dedicated practice surface, wording followed by address recall, independent reference reviews, and offline reference-draft recovery.
 
+[Memory tracking and reading update 1.1.0](docs/MEMORY-TRACKING-UPDATE.md): visible learning, personal memorized marks, shared status maps, gradual review intervals, subtle word difficulty and optional insights, plus direct Bible navigation. Existing progress stays on the same installation.
 
 [Automatic first-letter practice](docs/AUTOMATIC-PRACTICE.md) is now the default: one tap chooses the passage and exercise, words appear as you type their initials, cues decrease automatically, and results save without a grading form. Learning steps and the remaining queue resume offline. Full-word checking and all six manual methods remain optional.
 

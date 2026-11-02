@@ -85,6 +85,7 @@ export interface PracticeItem {
   reason: "review" | "new";
   stage: number;
   due?: number;
+  referenceOnly?: boolean;
 }
 export function dailyQueue(
   records: Entry[],
@@ -102,7 +103,14 @@ export function dailyQueue(
         units.get(r.id)?.refs.every((ref) => sourceRefs.includes(ref)),
       )
     : reviews;
-  const due = dueQueue(scoped, now);
+  const due = dueQueue(
+    scoped.filter((state) => !state.id.startsWith("reference:")),
+    now,
+  );
+  const referencesDue = dueQueue(
+    scoped.filter((state) => state.id.startsWith("reference:")),
+    now,
+  );
   let budget = Math.max(1, Math.floor(minutes / 2));
   const items: PracticeItem[] = [];
   for (const state of due) {
@@ -119,6 +127,24 @@ export function dailyQueue(
     });
     budget -= cost;
     if (budget <= 0) break;
+  }
+  // A wording review asks for its starting address. A longer passage does
+  // not prove the address of every later verse; keep those due challenges.
+  const wordingCovered = new Set(items.map((item) => item.refs[0]));
+  for (const state of referencesDue) {
+    if (budget <= 0) break;
+    const unit = units.get(state.id);
+    if (unit?.refs.length !== 1 || wordingCovered.has(unit.refs[0])) continue;
+    items.push({
+      id: state.id,
+      refs: unit.refs,
+      reason: "review",
+      stage: state.stage,
+      due: state.due,
+      referenceOnly: true,
+    });
+    wordingCovered.add(unit.refs[0]);
+    budget--;
   }
   const known = new Set(
       reviews

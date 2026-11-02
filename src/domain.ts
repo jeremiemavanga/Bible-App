@@ -51,7 +51,11 @@ export interface ReviewAttempt {
   referenceAccuracy?: number;
   evidence?: "typed" | "self" | "initials";
   wordResults?: { index: number; missed: boolean; hinted: boolean }[];
-  exercise?: "guided-learning" | "initials-recall" | "written-recall";
+  exercise?:
+    | "guided-learning"
+    | "initials-recall"
+    | "written-recall"
+    | "reference-recall";
 }
 export interface MemoryProject {
   name: string;
@@ -142,10 +146,22 @@ export interface LocalDraft {
 export interface GuidedDraft {
   version: 1;
   phase:
-    "read" | "follow" | "cues" | "recall" | "written" | "confirm" | "feedback";
+    | "read"
+    | "follow"
+    | "cues"
+    | "recall"
+    | "written"
+    | "confirm"
+    | "reference"
+    | "feedback";
   mode: "learn" | "recall";
   token: string;
   remaining: Ref[][];
+  referenceOnly?: boolean;
+  referenceRemaining?: boolean[];
+  referenceMistakes?: number;
+  referenceHelped?: boolean;
+  referenceOutcome?: { accuracy: number; due: number };
   minutes: number;
   mistakes: number;
   missedWords?: number[];

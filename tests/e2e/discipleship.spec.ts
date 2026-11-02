@@ -1,7 +1,7 @@
 import { test, expect, type Page } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
 import { navigate, fullPassagePractice } from "./navigation";
-import { chooseFullWording } from "./guided";
+import { chooseFullWording, completeReference } from "./guided";
 const verse =
   "Thy word have I hid in mine heart, that I might not sin against thee.";
 async function records(page: Page): Promise<any[]> {
@@ -170,12 +170,13 @@ test("a first short session leads through optional reflection and prayer and rec
   await page
     .getByRole("button", { name: "Begin a five-minute session", exact: true })
     .click();
-  await expect(
-    page.getByText("1 of 1 passages", { exact: true }),
-  ).toBeVisible();
+  await expect(page.getByText("1 of 1 passages", { exact: true })).toHaveCount(
+    0,
+  );
   await chooseFullWording(page);
   await page.getByLabel("Your recall", { exact: true }).fill(verse);
   await page.getByRole("button", { name: "Check & save", exact: true }).click();
+  await completeReference(page);
   await expect(
     page.getByRole("heading", { name: "Practice saved.", exact: true }),
   ).toBeVisible();
@@ -223,7 +224,12 @@ test("a first short session leads through optional reflection and prayer and rec
   );
   const rows = await records(page);
   expect(rows.filter((row) => row.kind === "reflection")).toHaveLength(0);
-  expect(rows.filter((row) => row.kind === "attempt")).toHaveLength(1);
+  expect(
+    rows.filter(
+      (row) =>
+        row.kind === "attempt" && !row.data.unitId.startsWith("reference:"),
+    ),
+  ).toHaveLength(1);
 });
 
 test("short session choice leaves the normal routine unchanged and backup transfer explains each device's separate copy", async ({

@@ -9,6 +9,10 @@ export function PracticeInsights({
   books: BibleBook[];
   records: Entry[];
 }) {
+  const referenceReviews = records.filter(
+    (e): e is Entry<"review"> =>
+      e.kind === "review" && e.data.id.startsWith("reference:"),
+  );
   const refs = [
     ...new Set(
       records
@@ -38,6 +42,22 @@ export function PracticeInsights({
     <details className="practice-insights">
       <summary>Practice insights · optional analysis</summary>
       <h2>Where to focus</h2>
+      {!!referenceReviews.length && (
+        <section>
+          <h3>Reference recall</h3>
+          <p>
+            Reference practice has its own review dates. Wording progress is
+            tracked separately.
+          </p>
+          {referenceReviews.map((row) => (
+            <p key={row.id}>
+              {label(books, row.data.id.slice(10) as Ref)} ·{" "}
+              {Math.round(row.data.accuracy * 100)}% reference accuracy · next
+              review {new Date(row.data.due).toLocaleString()}
+            </p>
+          ))}
+        </section>
+      )}
       <p>
         Last ten recorded recalls per passage. First-letter results are separate
         from full-word verification.

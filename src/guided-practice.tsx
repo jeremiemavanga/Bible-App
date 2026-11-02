@@ -1,5 +1,13 @@
+import { saveReferenceReview } from "./reference-recall";
 import { markMemorized, wordDifficulty } from "./memory";
-import { Fragment, useEffect, useMemo, useRef, useState } from "react";
+import {
+  Fragment,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { flushSync } from "react-dom";
 import {
   label,
@@ -9,7 +17,7 @@ import {
   type GuidedDraft,
   type Ref,
 } from "./domain";
-import { useLocalDraft } from "./drafts";
+import { flushDrafts, useLocalDraft } from "./drafts";
 import {
   acceptInitials,
   automaticMode,
@@ -29,6 +37,8 @@ export function GuidedPractice({
   minutes,
   position,
   total,
+  referenceOnly = false,
+  referenceRemaining = [],
   onSaved,
   onNext,
   onPause,
@@ -41,6 +51,8 @@ export function GuidedPractice({
   minutes: number;
   position: number;
   total: number;
+  referenceOnly?: boolean;
+  referenceRemaining?: boolean[];
   onSaved: () => Promise<void>;
   onNext: () => void;
   onPause: () => void;
@@ -48,13 +60,19 @@ export function GuidedPractice({
 }) {
   const unitId = passageId(refs, books);
   const [initial] = useState(() => {
-    const mode = automaticMode(records, unitId);
+    const mode = referenceOnly ? "recall" : automaticMode(records, unitId);
     return {
       version: 1 as const,
       mode,
-      phase: mode === "learn" ? ("read" as const) : ("recall" as const),
+      phase: referenceOnly
+        ? ("reference" as const)
+        : mode === "learn"
+          ? ("read" as const)
+          : ("recall" as const),
       token: crypto.randomUUID(),
       remaining,
+      referenceOnly,
+      referenceRemaining,
       minutes,
       mistakes: 0,
     };
@@ -72,11 +90,13 @@ export function GuidedPractice({
   useEffect(() => {
     if (
       draft.ready &&
-      JSON.stringify(guide.remaining) !== JSON.stringify(remaining)
+      (JSON.stringify(guide.remaining) !== JSON.stringify(remaining) ||
+        JSON.stringify(guide.referenceRemaining ?? []) !==
+          JSON.stringify(referenceRemaining))
     ) {
-      draft.update({ guided: { ...guide, remaining } });
+      draft.update({ guided: { ...guide, remaining, referenceRemaining } });
     }
-  }, [draft.ready, remaining]);
+  }, [draft.ready, remaining, referenceRemaining]);
   const expected = refs.map((ref) => textFor(books, ref)).join(" ");
   const words = useMemo(() => guidedWords(expected), [expected]);
   const heatLevels = useMemo(
@@ -95,6 +115,8 @@ export function GuidedPractice({
   const working = useRef(false);
   const input = useRef<HTMLInputElement>(null);
   const heading = useRef<HTMLHeadingElement>(null);
+  const referenceInput = useRef<HTMLInputElement>(null);
+  const pauseDialog = useRef<HTMLDialogElement>(null);
   const ready = draft.ready && !busy;
   const cursor = [...draft.value.text].length;
   const complete = cursor === words.length;
@@ -105,13 +127,73 @@ export function GuidedPractice({
     recall: "Bring the words to mind.",
     written: "Check the full wording.",
     confirm: "Did the words come to mind?",
+    reference:
+      refs.length > 1
+        ? "Where does this passage begin?"
+        : "Where is this passage found?",
     feedback: "Practice saved.",
   }[guide.phase];
   useEffect(() => {
     if (["follow", "cues", "recall"].includes(guide.phase) && draft.ready)
       input.current?.focus();
+    else if (guide.phase === "reference") referenceInput.current?.focus();
     else heading.current?.focus();
   }, [guide.phase, draft.ready]);
+  // Revealing full words can add lines without replacing the focused input.
+  // Move only when necessary, so ordinary typing does not keep scrolling.
+  useLayoutEffect(() => {
+    if (!ready || !["follow", "cues", "recall"].includes(guide.phase)) return;
+    const target = input.current;
+    if (!target) return;
+    let frame = 0;
+    const keepInputVisible = () => {
+      if (document.activeElement !== target) return;
+      const viewport = window.visualViewport;
+      const viewportTop = viewport?.offsetTop ?? 0;
+      const viewportBottom =
+        viewportTop + (viewport?.height ?? window.innerHeight);
+      const controls = target
+        .closest(".guided-practice")
+        ?.querySelector(".focus-controls");
+      const visibleTop =
+        Math.max(
+          viewportTop,
+          controls?.getBoundingClientRect().bottom ?? viewportTop,
+        ) + 12;
+      const visibleBottom = viewportBottom - 16;
+      const bounds = target.getBoundingClientRect();
+      const delta =
+        bounds.bottom > visibleBottom + 1
+          ? bounds.bottom - visibleBottom
+          : bounds.top < visibleTop - 1
+            ? bounds.top - visibleTop
+            : 0;
+      if (Math.abs(delta) > 1)
+        window.scrollBy({ top: delta, behavior: "instant" });
+    };
+    const scheduleCheck = () => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(keepInputVisible);
+    };
+    keepInputVisible();
+    target.addEventListener("focus", scheduleCheck);
+    window.addEventListener("resize", scheduleCheck);
+    window.visualViewport?.addEventListener("resize", scheduleCheck);
+    window.visualViewport?.addEventListener("scroll", scheduleCheck);
+    const observer =
+      typeof ResizeObserver === "undefined"
+        ? undefined
+        : new ResizeObserver(scheduleCheck);
+    observer?.observe(target);
+    return () => {
+      cancelAnimationFrame(frame);
+      observer?.disconnect();
+      target.removeEventListener("focus", scheduleCheck);
+      window.removeEventListener("resize", scheduleCheck);
+      window.visualViewport?.removeEventListener("resize", scheduleCheck);
+      window.visualViewport?.removeEventListener("scroll", scheduleCheck);
+    };
+  }, [cursor, guide.phase, ready]);
   const move = (phase: GuidedDraft["phase"]) => {
     setMismatch(false);
     setError("");
@@ -173,9 +255,10 @@ export function GuidedPractice({
       });
       draft.update({
         text,
+        reference: "",
         guided: {
           ...guide,
-          phase: "feedback",
+          phase: "reference",
           outcome: {
             accuracy: saved.attempt.accuracy,
             evidence: saved.attempt.evidence ?? evidence,
@@ -188,6 +271,56 @@ export function GuidedPractice({
     } finally {
       working.current = false;
       setBusy(false);
+    }
+  };
+  const checkAddress = async (help = false) => {
+    if (working.current || !ready) return;
+    working.current = true;
+    setBusy(true);
+    setError("");
+    try {
+      const result = await saveReferenceReview({
+        books,
+        ref: refs[0],
+        token: guide.token,
+        at: Date.now(),
+        input: help ? label(books, refs[0]) : (draft.value.reference ?? ""),
+        helped: help || !!guide.referenceHelped,
+      });
+      const next = {
+        ...guide,
+        referenceOutcome: {
+          accuracy: result.attempt.accuracy,
+          due: result.state.due,
+        },
+      };
+      if (help) {
+        draft.update({ guided: { ...next, referenceHelped: true } });
+      } else if (result.correct) {
+        draft.update({ guided: { ...next, phase: "feedback" } });
+      } else {
+        draft.update({
+          guided: {
+            ...next,
+            referenceMistakes: (guide.referenceMistakes ?? 0) + 1,
+          },
+        });
+      }
+      await onSaved();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : String(cause));
+    } finally {
+      working.current = false;
+      setBusy(false);
+    }
+  };
+  const finishForNow = async () => {
+    try {
+      await flushDrafts();
+      pauseDialog.current?.close();
+      onPause();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : String(cause));
     }
   };
   const writeInitials = (text: string, hint = false) => {
@@ -242,39 +375,37 @@ export function GuidedPractice({
       : undefined;
   const due = reviewFor(records, "verse:" + refs[0])?.due;
   return (
-    <section className="guided-practice" aria-label="Automatic practice">
-      <div className="guided-topline">
-        <span>
-          {position + 1} of {total} passages
-        </span>
-        <span>Chosen for you</span>
+    <section
+      className="guided-practice practice-focus"
+      aria-label="Automatic practice"
+    >
+      <div className="focus-controls">
+        <p className="eyebrow">
+          {guide.phase === "reference" || guide.referenceOnly ? (
+            "KJV"
+          ) : (
+            <>
+              {label(books, refs[0])}
+              {refs.length > 1 ? ` · ${refs.length} verses` : ""} · KJV
+            </>
+          )}
+        </p>
+        <button
+          disabled={busy}
+          onClick={() => pauseDialog.current?.showModal()}
+        >
+          Pause
+        </button>
       </div>
-      <p className="eyebrow">
-        {label(books, refs[0])}
-        {refs.length > 1 ? ` · ${refs.length} verses` : ""} · KJV
-      </p>
-      <h1 ref={heading} tabIndex={-1}>
+      <h1
+        className={
+          guide.phase === "reference" ? "reference-prompt" : "focus-heading"
+        }
+        ref={heading}
+        tabIndex={-1}
+      >
         {title}
       </h1>
-      <ol className="guided-steps" aria-label="Learning steps">
-        <li aria-current={guide.phase === "read" ? "step" : undefined}>Read</li>
-        <li
-          aria-current={
-            ["follow", "cues"].includes(guide.phase) ? "step" : undefined
-          }
-        >
-          Learn
-        </li>
-        <li
-          aria-current={
-            ["recall", "written", "confirm"].includes(guide.phase)
-              ? "step"
-              : undefined
-          }
-        >
-          Remember
-        </li>
-      </ol>
       {error && (
         <p role="alert" className="error">
           {error} Your review has not been confirmed saved.
@@ -381,11 +512,15 @@ export function GuidedPractice({
             id="initials-help"
             role="status"
           >
-            {mismatch
-              ? "That letter doesn’t match. Try again, or use a hint."
-              : busy
-                ? "Saving your practice…"
-                : `${Math.min(cursor, words.length)} of ${words.length} words`}
+            {mismatch ? (
+              "That letter doesn’t match. Try again, or use a hint."
+            ) : (
+              <span className="sr-only">
+                {busy
+                  ? "Saving your practice…"
+                  : `${Math.min(cursor, words.length)} of ${words.length} words`}
+              </span>
+            )}
           </div>
           {complete && guide.phase === "follow" && (
             <button
@@ -438,8 +573,7 @@ export function GuidedPractice({
         <>
           <blockquote className="guided-passage">{expected}</blockquote>
           <p className="guided-instruction">
-            First letters help us practise, but cannot check every word. Compare
-            the wording above with what you recalled, including verse order.
+            Did the full wording come to mind, including verse order?
           </p>
           <button
             className="primary guided-primary"
@@ -460,10 +594,7 @@ export function GuidedPractice({
             void save("typed", 0);
           }}
         >
-          <p className="guided-instruction">
-            An optional check of every KJV word. Your result saves automatically
-            when you check it.
-          </p>
+          <p className="guided-instruction">Type the passage from memory.</p>
           <label>
             Your recall
             <textarea
@@ -484,16 +615,93 @@ export function GuidedPractice({
           </button>
         </form>
       )}
+      {guide.phase === "reference" && (
+        <>
+          <blockquote className="reference-passage">
+            {textFor(books, refs[0])}
+          </blockquote>
+          <form
+            className="reference-form"
+            onSubmit={(event) => {
+              event.preventDefault();
+              void checkAddress();
+            }}
+          >
+            <label className="focus-input-label">
+              {refs.length > 1
+                ? "Starting reference"
+                : "Book, chapter and verse"}
+              <input
+                ref={referenceInput}
+                value={draft.value.reference ?? ""}
+                maxLength={200}
+                required
+                readOnly={!ready}
+                autoComplete="off"
+                autoCorrect="off"
+                autoCapitalize="off"
+                spellCheck={false}
+                placeholder="Type the reference"
+                onChange={(event) =>
+                  draft.update({ reference: event.target.value })
+                }
+              />
+            </label>
+            <button
+              type="submit"
+              className="primary guided-primary"
+              disabled={!ready || !draft.value.reference?.trim()}
+            >
+              Check reference
+            </button>
+            <button
+              type="button"
+              className="guided-hint"
+              disabled={!ready || guide.referenceHelped}
+              onClick={() => void checkAddress(true)}
+            >
+              Help with the reference
+            </button>
+            {guide.referenceHelped ? (
+              <p role="status">
+                {label(books, refs[0])} · Reference help used.
+              </p>
+            ) : (
+              !!guide.referenceMistakes && (
+                <p role="status">
+                  That reference doesn’t match. Try again, or use reference
+                  help.
+                </p>
+              )
+            )}
+          </form>
+        </>
+      )}
       {guide.phase === "feedback" && (
         <div className="guided-feedback" role="status">
           <p>
-            {guide.outcome?.evidence === "initials"
-              ? "You worked through the passage. Next time, we’ll check what you remember."
-              : guide.outcome?.evidence === "self"
-                ? "Your self-assessed recall is saved."
-                : `${Math.round((guide.outcome?.accuracy ?? 0) * 100)}% word accuracy. Your review is saved.`}
+            {guide.referenceOnly
+              ? "Your reference review is saved. Your wording progress is unchanged."
+              : guide.outcome?.evidence === "initials"
+                ? "You worked through the passage. Next time, we’ll check what you remember."
+                : guide.outcome?.evidence === "self"
+                  ? "Your self-assessed recall is saved."
+                  : `${Math.round((guide.outcome?.accuracy ?? 0) * 100)}% word accuracy. Your review is saved.`}
           </p>
-          {due && (
+          {guide.referenceOutcome && (
+            <p className="muted">
+              {guide.referenceOutcome.accuracy === 1
+                ? "Reference recalled."
+                : "We’ll revisit the reference sooner; the wording result is separate."}{" "}
+              Reference review:{" "}
+              {new Date(guide.referenceOutcome.due).toLocaleDateString(
+                undefined,
+                { month: "short", day: "numeric" },
+              )}
+              .
+            </p>
+          )}
+          {!guide.referenceOnly && due && (
             <p className="muted">
               Next review:{" "}
               {new Date(due).toLocaleDateString(undefined, {
@@ -538,73 +746,101 @@ export function GuidedPractice({
           </button>
         </div>
       )}
-      <p className="guided-draft-status" role="status">
-        {draft.status === "saving"
-          ? "Saving your place…"
-          : draft.status === "saved" && draft.value.guided
-            ? "Your place is saved on this device."
-            : ""}
-      </p>
-      <button
-        disabled={busy}
-        onClick={async () => {
-          try {
-            const undo = await markMemorized(refs);
-            await onSaved();
-            setUndoMark(() => undo);
-          } catch (cause) {
-            setError(String(cause));
-          }
-        }}
+      <dialog
+        ref={pauseDialog}
+        className="practice-pause"
+        aria-labelledby="pause-practice-title"
       >
-        Mark as memorized
-      </button>
-      {undoMark && (
+        <h2 id="pause-practice-title">Pause practice</h2>
         <button
-          onClick={async () => {
-            await undoMark();
-            setUndoMark(null);
-            await onSaved();
+          className="primary"
+          onClick={() => {
+            pauseDialog.current?.close();
+            if (guide.phase === "reference") referenceInput.current?.focus();
+            else input.current?.focus();
           }}
         >
-          Undo memorized mark
+          Continue practice
         </button>
-      )}
-      <details className="guided-options">
-        <summary>More options</summary>
-        {!["feedback", "confirm"].includes(guide.phase) && (
-          <ContextPassage
-            books={books}
-            refs={refs}
-            onRead={() => {
-              if (["recall", "written"].includes(guide.phase))
-                draft.update({ hints: (draft.value.hints ?? 0) + 1 });
-            }}
-          />
+        <button disabled={busy} onClick={() => void finishForNow()}>
+          Finish for now
+        </button>
+        {error && (
+          <p role="alert" className="error">
+            {error}
+          </p>
         )}
-        {!["written", "feedback"].includes(guide.phase) && (
+        <details className="guided-options pause-options">
+          <summary>More options</summary>
           <button
-            disabled={!ready}
-            onClick={() => {
-              draft.update({
-                text: "",
-                hints:
-                  (draft.value.hints ?? 0) +
-                  Number(cursor > 0 || guide.phase === "confirm"),
-                guided: { ...guide, phase: "written" },
-              });
+            disabled={busy}
+            onClick={async () => {
+              try {
+                const undo = await markMemorized(refs);
+                await onSaved();
+                setUndoMark(() => undo);
+              } catch (cause) {
+                setError(String(cause));
+              }
             }}
           >
-            Type the full wording instead
+            Mark as memorized
           </button>
-        )}
-        <button disabled={busy} onClick={onManual}>
-          Choose a memorization method
-        </button>
-        <button disabled={busy} onClick={onPause}>
-          Pause for now
-        </button>
-      </details>
+          {undoMark && (
+            <button
+              onClick={async () => {
+                await undoMark();
+                setUndoMark(null);
+                await onSaved();
+              }}
+            >
+              Undo memorized mark
+            </button>
+          )}
+
+          {!["feedback", "confirm", "reference"].includes(guide.phase) &&
+            !guide.referenceOnly && (
+              <ContextPassage
+                books={books}
+                refs={refs}
+                onRead={() => {
+                  if (["recall", "written"].includes(guide.phase))
+                    draft.update({ hints: (draft.value.hints ?? 0) + 1 });
+                }}
+              />
+            )}
+          {!["written", "feedback", "reference"].includes(guide.phase) &&
+            !guide.referenceOnly && (
+              <button
+                disabled={!ready}
+                onClick={() => {
+                  draft.update({
+                    text: "",
+                    hints:
+                      (draft.value.hints ?? 0) +
+                      Number(cursor > 0 || guide.phase === "confirm"),
+                    guided: { ...guide, phase: "written" },
+                  });
+                  pauseDialog.current?.close();
+                }}
+              >
+                Type the full wording instead
+              </button>
+            )}
+          <button
+            disabled={busy}
+            onClick={() => {
+              pauseDialog.current?.close();
+              onManual();
+            }}
+          >
+            Choose a memorization method
+          </button>
+          <button disabled={busy} onClick={() => void finishForNow()}>
+            Pause for now
+          </button>
+        </details>
+      </dialog>
     </section>
   );
 }

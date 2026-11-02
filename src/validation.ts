@@ -89,6 +89,29 @@ export function validateEntry(e: Entry) {
           d.guided.token.length <= 128 &&
           number(d.guided.minutes, 5, 190) &&
           number(d.guided.mistakes) &&
+          (d.guided.referenceOnly === undefined ||
+            (typeof d.guided.referenceOnly === "boolean" &&
+              (!d.guided.referenceOnly || d.refs.length === 1))) &&
+          (d.guided.referenceMistakes === undefined ||
+            (Number.isInteger(d.guided.referenceMistakes) &&
+              number(d.guided.referenceMistakes))) &&
+          (d.guided.referenceHelped === undefined ||
+            typeof d.guided.referenceHelped === "boolean") &&
+          (d.guided.referenceOutcome === undefined ||
+            (d.guided.referenceOutcome &&
+              number(d.guided.referenceOutcome.accuracy, 0, 1) &&
+              number(d.guided.referenceOutcome.due))) &&
+          (d.guided.referenceRemaining === undefined ||
+            (Array.isArray(d.guided.referenceRemaining) &&
+              d.guided.referenceRemaining.length <= 256 &&
+              Array.isArray(d.guided.remaining) &&
+              d.guided.referenceRemaining.length ===
+                d.guided.remaining.length &&
+              d.guided.referenceRemaining.every(
+                (flag: unknown, index: number) =>
+                  typeof flag === "boolean" &&
+                  (!flag || d.guided.remaining[index]?.length === 1),
+              ))) &&
           (d.guided.wordTrackingIncomplete === undefined ||
             typeof d.guided.wordTrackingIncomplete === "boolean") &&
           wordIndexes(d.guided.missedWords) &&
@@ -154,9 +177,12 @@ export function validateEntry(e: Entry) {
       (d.evidence === undefined ||
         ["typed", "self", "initials"].includes(d.evidence)) &&
       (d.exercise === undefined ||
-        ["guided-learning", "initials-recall", "written-recall"].includes(
-          d.exercise,
-        )),
+        [
+          "guided-learning",
+          "initials-recall",
+          "written-recall",
+          "reference-recall",
+        ].includes(d.exercise)),
     anchor: () =>
       validRef(d.ref) &&
       texts([

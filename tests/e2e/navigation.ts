@@ -1,5 +1,16 @@
 import type { Page } from "@playwright/test";
 export async function navigate(page: Page, destination: string) {
+  const navigation = page.getByRole("navigation", { name: "Main navigation" });
+  if (
+    !(await navigation.isVisible()) &&
+    (await page.getByRole("button", { name: "Pause", exact: true }).isVisible())
+  ) {
+    await page.getByRole("button", { name: "Pause", exact: true }).click();
+    await page
+      .getByRole("dialog")
+      .getByRole("button", { name: "Finish for now", exact: true })
+      .click();
+  }
   if (["Projects", "Practice", "Chapter Code"].includes(destination)) {
     await page
       .getByRole("navigation", { name: "Main navigation" })

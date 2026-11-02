@@ -80,7 +80,7 @@ import {
 } from "./learning";
 import { flushDrafts, useLocalDraft } from "./drafts";
 import { GuidedPractice } from "./guided-practice";
-import { automaticQueue, passageId, reviewFor } from "./automatic";
+import { automaticQueue, passageId, reviewFor, resumeQueue } from "./automatic";
 import { validTranslation } from "./validation";
 import "./style.css";
 const updateSW = registerSW({
@@ -133,6 +133,8 @@ function App() {
     [update, setUpdate] = useState(false),
     [sidebarOpen, setSidebarOpen] = useState(false),
     [session, setSession] = useState<Ctx["session"]>(null);
+  const practiceFocus =
+    page === "Guided" && !!session && session.position < session.items.length;
   const refresh = async () => setRecords(await db.records.toArray());
   const run = async (
     fn: () => Promise<unknown>,
@@ -187,6 +189,7 @@ function App() {
     (records.find((e) => e.kind === "preferences")
       ?.data as NotificationPreference) ?? defaults;
   useEffect(() => {
+    if (practiceFocus) return;
     let last = "";
     const timer = setInterval(() => {
       const now = new Date(),
@@ -212,7 +215,7 @@ function App() {
       }
     }, 30000);
     return () => clearInterval(timer);
-  }, [prefs]);
+  }, [prefs, practiceFocus]);
   useEffect(() => {
     void refresh().catch(() =>
       setError(
@@ -254,23 +257,12 @@ function App() {
         )
         .sort((a, b) => b.data.updated - a.data.updated)[0];
       const items = saved?.data.guided
-        ? [
-            saved.data.refs,
-            ...saved.data.guided.remaining.filter(
-              (group) =>
-                !projectRefs || group.every((ref) => source.includes(ref)),
-            ),
-          ].map((group) => {
-            const unitId = passageId(group, books),
-              state = reviewFor(records, unitId);
-            return {
-              id: unitId,
-              refs: group,
-              reason: state ? ("review" as const) : ("new" as const),
-              stage: state?.stage ?? 0,
-              due: state?.due,
-            };
-          })
+        ? resumeQueue(
+            records,
+            books,
+            saved.data,
+            projectRefs ? source : undefined,
+          )
         : automaticQueue(records, Date.now(), minutes, source, !!projectRefs);
       setSession({
         items,
@@ -293,112 +285,133 @@ function App() {
       window.scrollTo({ top: 0, behavior: "instant" });
     },
   };
+  useEffect(() => {
+    if (practiceFocus)
+      document.querySelectorAll("audio").forEach((player) => player.pause());
+  }, [practiceFocus]);
   return (
     <>
       <a className="skip" href="#main">
         Skip to content
       </a>
-      <header>
-        <a
-          className="brand"
-          href="#"
-          onClick={(e) => {
-            e.preventDefault();
-            setPage("Today");
-          }}
-        >
-          <BookOpen
-            className="brand-icon"
-            aria-hidden="true"
-            strokeWidth={1.5}
-          />
-          <span>
-            The Word Within<small>HIDE HIS WORD IN YOUR HEART</small>
+      {!practiceFocus && (
+        <header>
+          <a
+            className="brand"
+            href="#"
+            onClick={(e) => {
+              e.preventDefault();
+              setPage("Today");
+            }}
+          >
+            <BookOpen
+              className="brand-icon"
+              aria-hidden="true"
+              strokeWidth={1.5}
+            />
+            <span>
+              The Word Within<small>HIDE HIS WORD IN YOUR HEART</small>
+            </span>
+          </a>
+          <span className="connection">
+            ●{" "}
+            {offline
+              ? "Offline"
+              : ready
+                ? "Offline ready"
+                : import.meta.env.DEV
+                  ? "Development mode"
+                  : "Preparing offline cache…"}
           </span>
-        </a>
-        <span className="connection">
-          ●{" "}
-          {offline
-            ? "Offline"
-            : ready
-              ? "Offline ready"
-              : import.meta.env.DEV
-                ? "Development mode"
-                : "Preparing offline cache…"}
-        </span>
-        <button
-          className="sidebar-toggle icon-button"
-          aria-label="Toggle sidebar"
-          aria-expanded={sidebarOpen}
-          onClick={() => setSidebarOpen(!sidebarOpen)}
-        >
-          <Menu aria-hidden="true" />
-        </button>
-        <details className="secondary-menu">
-          <summary aria-label="More options">
-            <Menu size={20} aria-hidden="true" />
-            <span>More</span>
-          </summary>
-          <div>
+          <button
+            className="sidebar-toggle icon-button"
+            aria-label="Toggle sidebar"
+            aria-expanded={sidebarOpen}
+            onClick={() => setSidebarOpen(!sidebarOpen)}
+          >
+            <Menu aria-hidden="true" />
+          </button>
+          <details className="secondary-menu">
+            <summary aria-label="More options">
+              <Menu size={20} aria-hidden="true" />
+              <span>More</span>
+            </summary>
+            <div>
+              {(
+                [
+                  ["Listen", Headphones],
+                  ["Settings", Settings2],
+                ] as const
+              ).map(([name, Icon]) => (
+                <button
+                  key={name}
+                  onClick={(e) => {
+                    ctx.go(name);
+                    const menu = e.currentTarget.closest("details");
+                    menu?.removeAttribute("open");
+                    menu?.querySelector("summary")?.focus();
+                  }}
+                >
+                  <Icon size={18} aria-hidden="true" />
+                  {name}
+                </button>
+              ))}
+            </div>
+          </details>
+        </header>
+      )}
+      <div
+        className={
+          "shell" +
+          (practiceFocus
+            ? " practice-focus-shell"
+            : sidebarOpen
+              ? " sidebar-open"
+              : "")
+        }
+      >
+        {!practiceFocus && (
+          <nav aria-label="Main navigation">
             {(
               [
-                ["Listen", Headphones],
-                ["Settings", Settings2],
+                { name: "Today", page: "Today", Icon: CalendarDays },
+                { name: "Bible", page: "Bible", Icon: Library },
+                { name: "Memory", page: "Memory", Icon: Brain },
+                { name: "Meditate", page: "Meditation", Icon: Leaf },
+                {
+                  name: "Progress",
+                  page: "Progress",
+                  Icon: ChartNoAxesCombined,
+                },
               ] as const
-            ).map(([name, Icon]) => (
-              <button
-                key={name}
-                onClick={(e) => {
-                  ctx.go(name);
-                  const menu = e.currentTarget.closest("details");
-                  menu?.removeAttribute("open");
-                  menu?.querySelector("summary")?.focus();
-                }}
-              >
-                <Icon size={18} aria-hidden="true" />
-                {name}
-              </button>
-            ))}
-          </div>
-        </details>
-      </header>
-      <div className={"shell" + (sidebarOpen ? " sidebar-open" : "")}>
-        <nav aria-label="Main navigation">
-          {(
-            [
-              { name: "Today", page: "Today", Icon: CalendarDays },
-              { name: "Bible", page: "Bible", Icon: Library },
-              { name: "Memory", page: "Memory", Icon: Brain },
-              { name: "Meditate", page: "Meditation", Icon: Leaf },
-              { name: "Progress", page: "Progress", Icon: ChartNoAxesCombined },
-            ] as const
-          ).map(({ name, page: target, Icon }) => {
-            const active =
-              page === target ||
-              (target === "Memory" &&
-                ["Projects", "Practice", "Guided", "Chapter Code"].includes(
-                  page,
-                ));
-            return (
-              <button
-                key={name}
-                aria-current={active ? "page" : undefined}
-                onClick={() => ctx.go(target)}
-              >
-                <Icon aria-hidden="true" strokeWidth={1.65} />
-                <span>{name}</span>
-              </button>
-            );
-          })}
-          <p className="nav-verse">
-            Scripture for a lifetime.
-            <br />
-            <small>PRIVATE. LOCAL. YOURS.</small>
-          </p>
-        </nav>
+            ).map(({ name, page: target, Icon }) => {
+              const active =
+                page === target ||
+                (target === "Memory" &&
+                  ["Projects", "Practice", "Guided", "Chapter Code"].includes(
+                    page,
+                  ));
+              return (
+                <button
+                  key={name}
+                  aria-current={active ? "page" : undefined}
+                  onClick={() => ctx.go(target)}
+                >
+                  <Icon aria-hidden="true" strokeWidth={1.65} />
+                  <span>{name}</span>
+                </button>
+              );
+            })}
+            <p className="nav-verse">
+              Scripture for a lifetime.
+              <br />
+              <small>PRIVATE. LOCAL. YOURS.</small>
+            </p>
+          </nav>
+        )}
         <main id="main" tabIndex={-1}>
           <div className="alerts" aria-live="polite">
-            {notice && (
+            {notice && !practiceFocus && (
               <p role="status">
                 {notice}
                 <button
@@ -414,7 +427,7 @@ function App() {
                 {error}
               </p>
             )}
-            {update && (
+            {update && !practiceFocus && (
               <p>
                 An app update is ready. Save your work and{" "}
                 <button
@@ -494,7 +507,9 @@ function App() {
               <button onClick={() => location.reload()}>Retry loading</button>
             </section>
           )}
-          <footer>Private by design · Scripture for a lifetime.</footer>
+          {!practiceFocus && (
+            <footer>Private by design · Scripture for a lifetime.</footer>
+          )}
         </main>
       </div>
     </>
@@ -569,6 +584,10 @@ function Automatic(c: Ctx) {
       minutes={session.minutes}
       position={session.position}
       total={session.items.length}
+      referenceOnly={item.referenceOnly}
+      referenceRemaining={session.items
+        .slice(session.position + 1)
+        .map((next) => !!next.referenceOnly)}
       onSaved={() => c.run(async () => {}, "")}
       onNext={c.nextPractice}
       onPause={() => c.go("Today")}
@@ -1007,7 +1026,10 @@ function Progress(c: Ctx) {
     attempts = c.records
       .filter((e) => e.kind === "attempt")
       .filter(
-        (e) => e.data.evidence !== "self" && e.data.evidence !== "initials",
+        (e) =>
+          e.data.evidence !== "self" &&
+          e.data.evidence !== "initials" &&
+          !e.data.unitId.startsWith("reference:"),
       ),
     mastered = reviews.filter(
       (r) =>
@@ -1159,20 +1181,26 @@ function Progress(c: Ctx) {
               onClick={() => {
                 const r = unitFor(s.id);
                 if (r) {
-                  c.select(r);
-                  c.go("Practice");
+                  if (s.id.startsWith("reference:")) c.startDaily(r);
+                  else {
+                    c.select(r);
+                    c.go("Practice");
+                  }
                 }
               }}
             >
+              {s.id.startsWith("reference:") ? "Reference · " : ""}
               {unitFor(s.id)?.[0]
                 ? label(c.books, unitFor(s.id)![0])
                 : "Saved passage"}{" "}
               · {stages[s.stage]} ·{" "}
-              {s.evidence === "self"
-                ? "Self-assessed"
-                : s.evidence === "initials"
-                  ? "Initial-letter practice"
-                  : Math.round(s.accuracy * 100) + "% word accuracy"}
+              {s.id.startsWith("reference:")
+                ? Math.round(s.accuracy * 100) + "% reference accuracy"
+                : s.evidence === "self"
+                  ? "Self-assessed"
+                  : s.evidence === "initials"
+                    ? "Initial-letter practice"
+                    : Math.round(s.accuracy * 100) + "% word accuracy"}
             </button>
           ))}
         </section>

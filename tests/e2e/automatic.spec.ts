@@ -2,7 +2,13 @@ import { test, expect, type Page } from "@playwright/test";
 import { readFileSync } from "node:fs";
 import AxeBuilder from "@axe-core/playwright";
 import { navigate } from "./navigation";
-import { chooseFullWording, initials, learnPassage, rows } from "./guided";
+import {
+  chooseFullWording,
+  completeReference,
+  initials,
+  learnPassage,
+  rows,
+} from "./guided";
 const books = JSON.parse(readFileSync("public/data/kjv.json", "utf8"));
 const psalm = books[18].chapters[118][10];
 const john = books[42].chapters[2][15];
@@ -131,16 +137,26 @@ test("one tap starts first-letter learning, removes setup decisions and saves au
     .getByRole("button", { name: "Try from memory", exact: true })
     .click();
   await page.getByLabel("First letters", { exact: true }).fill(initials(psalm));
+  await completeReference(page);
   await expect(
     page.getByRole("heading", { name: "Practice saved.", exact: true }),
   ).toBeVisible();
   const saved = await rows(page);
-  expect(saved.find((row) => row.kind === "attempt").data).toMatchObject({
+  expect(
+    saved.find(
+      (row) =>
+        row.kind === "attempt" && !row.data.unitId.startsWith("reference:"),
+    ).data,
+  ).toMatchObject({
     exercise: "guided-learning",
     evidence: "initials",
     hints: 1,
   });
-  expect(saved.find((row) => row.kind === "review").data.stage).toBe(0);
+  expect(
+    saved.find(
+      (row) => row.kind === "review" && row.data.id.startsWith("verse:"),
+    ).data.stage,
+  ).toBe(0);
   await page
     .getByRole("button", { name: "Finish session", exact: true })
     .click();
@@ -175,9 +191,14 @@ test("offline reload resumes the exact cue level, letters and remaining passage 
     .click();
   const partial = initials(books[18].chapters[116][0]).slice(0, 4);
   await page.getByLabel("First letters", { exact: true }).fill(partial);
-  await expect(
-    page.getByText("Your place is saved on this device.", { exact: true }),
-  ).toBeVisible();
+  await expect
+    .poll(async () => {
+      const saved = await rows(page);
+      return saved.find(
+        (row) => row.kind === "draft" && row.data.guided?.phase === "cues",
+      )?.data.text;
+    })
+    .toBe(partial);
   await context.setOffline(true);
   await page.reload();
   await page
@@ -198,16 +219,20 @@ test("offline reload resumes the exact cue level, letters and remaining passage 
   await page
     .getByLabel("First letters", { exact: true })
     .fill(initials(books[18].chapters[116][0]));
+  await completeReference(page);
   await expect(
     page.getByRole("heading", { name: "Practice saved.", exact: true }),
   ).toBeVisible();
   await page.getByRole("button", { name: "Next passage", exact: true }).click();
-  await expect(page.locator(".guided-practice > .eyebrow")).toHaveText(
-    "Psalms 117:2 · KJV",
-  );
   await expect(
-    page.getByText("2 of 2 passages", { exact: true }),
+    page.getByRole("heading", { name: "Read it through.", exact: true }),
   ).toBeVisible();
+  await expect(page.locator(".guided-passage")).toContainText(
+    books[18].chapters[116][1],
+  );
+  await expect(page.getByText("2 of 2 passages", { exact: true })).toHaveCount(
+    0,
+  );
 });
 
 test("due reviews automatically hide cues and separate initials self-assessment from verified word accuracy", async ({
@@ -230,11 +255,17 @@ test("due reviews automatically hide cues and separate initials self-assessment 
   await page
     .getByRole("button", { name: "Yes, I recalled the wording", exact: true })
     .click();
+  await completeReference(page);
   await expect(
     page.getByRole("heading", { name: "Practice saved.", exact: true }),
   ).toBeVisible();
   const saved = await rows(page);
-  expect(saved.filter((row) => row.kind === "attempt")).toHaveLength(3);
+  expect(
+    saved.filter(
+      (row) =>
+        row.kind === "attempt" && !row.data.unitId.startsWith("reference:"),
+    ),
+  ).toHaveLength(3);
   expect(
     saved.find((row) => row.id === "review:verse:43:3:16").data,
   ).toMatchObject({ stage: 3, evidence: "self", reviews: 3 });
@@ -260,6 +291,7 @@ test("a hint on the final initial is recorded and automatically restores support
   await page
     .getByRole("button", { name: "Yes, I recalled the wording", exact: true })
     .click();
+  await completeReference(page);
   await expect(
     page.getByRole("heading", { name: "Practice saved.", exact: true }),
   ).toBeVisible();
@@ -269,7 +301,10 @@ test("a hint on the final initial is recorded and automatically restores support
   ).toBeLessThan(2);
   expect(
     saved
-      .filter((row) => row.kind === "attempt")
+      .filter(
+        (row) =>
+          row.kind === "attempt" && !row.data.unitId.startsWith("reference:"),
+      )
       .find((row) => row.id.startsWith("attempt:guided:")).data.hints,
   ).toBe(1);
   await page
@@ -316,19 +351,32 @@ test("recovery after a feedback draft write fails does not save the same review 
     ),
   ).toBeVisible();
   expect(
-    (await rows(page)).filter((row) => row.kind === "attempt"),
+    (await rows(page)).filter(
+      (row) =>
+        row.kind === "attempt" && !row.data.unitId.startsWith("reference:"),
+    ),
   ).toHaveLength(1);
   await page.reload();
   await page
     .getByRole("button", { name: "Continue practice", exact: true })
     .click();
-  await page.getByRole("button", { name: "Continue", exact: true }).click();
+
+  await completeReference(page);
   await expect(
     page.getByRole("heading", { name: "Practice saved.", exact: true }),
   ).toBeVisible();
   const saved = await rows(page);
-  expect(saved.filter((row) => row.kind === "attempt")).toHaveLength(1);
-  expect(saved.find((row) => row.kind === "review").data.reviews).toBe(1);
+  expect(
+    saved.filter(
+      (row) =>
+        row.kind === "attempt" && !row.data.unitId.startsWith("reference:"),
+    ),
+  ).toHaveLength(1);
+  expect(
+    saved.find(
+      (row) => row.kind === "review" && row.data.id.startsWith("verse:"),
+    ).data.reviews,
+  ).toBe(1);
 });
 
 test("full-word checking remains optional and saves omissions without a separate grading form", async ({
@@ -344,12 +392,16 @@ test("full-word checking remains optional and saves omissions without a separate
     .getByLabel("Your recall", { exact: true })
     .fill(psalm.replace("mine heart", "heart"));
   await page.getByRole("button", { name: "Check & save", exact: true }).click();
+  await completeReference(page);
   await expect(
     page.getByRole("heading", { name: "Practice saved.", exact: true }),
   ).toBeVisible();
   await page.getByText("Words to revisit", { exact: true }).click();
   await expect(page.getByText("omission: mine", { exact: true })).toBeVisible();
-  const attempt = (await rows(page)).find((row) => row.kind === "attempt");
+  const attempt = (await rows(page)).find(
+    (row) =>
+      row.kind === "attempt" && !row.data.unitId.startsWith("reference:"),
+  );
   expect(attempt.data.accuracy).toBeLessThan(1);
   expect(attempt.data.evidence).toBe("typed");
   await expect(page.getByLabel("Difficulty", { exact: true })).toHaveCount(0);

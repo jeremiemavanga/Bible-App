@@ -1,5 +1,5 @@
 import { navigate, fullPassagePractice } from "./navigation";
-import { chooseFullWording } from "./guided";
+import { chooseFullWording, completeReference } from "./guided";
 import { test, expect } from "@playwright/test";
 test("offline Scripture, practice, anchors, reflection, and clean-context encrypted restore", async ({
   page,
@@ -49,6 +49,7 @@ test("offline Scripture, practice, anchors, reflection, and clean-context encryp
       "Thy word have I hid in mine heart, that I might not sin against thee.",
     );
   await page.getByRole("button", { name: "Check & save", exact: true }).click();
+  await completeReference(page);
   await expect(
     page.getByText("100% word accuracy. Your review is saved.", {
       exact: true,

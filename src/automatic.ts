@@ -1,4 +1,10 @@
-import { normalize, type Entry, type Ref, type ReviewState } from "./domain";
+import {
+  normalize,
+  type Entry,
+  type LocalDraft,
+  type Ref,
+  type ReviewState,
+} from "./domain";
 import { dailyQueue, type PracticeItem } from "./learning";
 
 export const guidedPhases = [
@@ -8,6 +14,7 @@ export const guidedPhases = [
   "recall",
   "written",
   "confirm",
+  "reference",
   "feedback",
 ] as const;
 export function guidedWords(text: string) {
@@ -121,4 +128,39 @@ export function reviewFor(
   return records.find(
     (e): e is Entry<"review"> => e.kind === "review" && e.data.id === unitId,
   )?.data;
+}
+
+/** Keep reference-only flags paired with their group when project filtering removes earlier items. */
+export function resumeQueue(
+  records: Entry[],
+  books: { chapters: string[][] }[],
+  draft: LocalDraft,
+  source?: Ref[],
+): PracticeItem[] {
+  if (!draft.guided) return [];
+  const groups = [
+    { refs: draft.refs, referenceOnly: !!draft.guided.referenceOnly },
+    ...draft.guided.remaining
+      .map((refs, index) => ({
+        refs,
+        referenceOnly: !!draft.guided?.referenceRemaining?.[index],
+      }))
+      .filter(
+        (item) => !source || item.refs.every((ref) => source.includes(ref)),
+      ),
+  ];
+  return groups.map((item) => {
+    const id = item.referenceOnly
+      ? "reference:" + item.refs[0]
+      : passageId(item.refs, books);
+    const state = reviewFor(records, id);
+    return {
+      id,
+      refs: item.refs,
+      referenceOnly: item.referenceOnly,
+      reason: state ? "review" : "new",
+      stage: state?.stage ?? 0,
+      due: state?.due,
+    };
+  });
 }

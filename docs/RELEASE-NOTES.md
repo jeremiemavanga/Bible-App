@@ -1,3 +1,9 @@
+# 1.2.0 — 2 November 2026
+
+See [practice focus and reference recall](FOCUS-REFERENCE-UPDATE.md) for behavior, compatibility and update instructions.
+
+Local validation passed: **84 unit/domain/backup checks**, the **93-scenario full browser suite** across desktop, phone and tablet Chromium, and **18 focused browser checks** after the final reference shortcut and long-passage refinements. Those follow-up checks cover six scenarios, including short viewports and 160% text. KJV source integrity, formatting, TypeScript, root and `/Bible-App/` production builds pass. The Pages-path smoke check confirms install metadata, attribution, offline provisioning, focused wording-to-reference practice, saved partial-address recovery and independent result storage. Native WebKit remains configured in GitHub verification and must pass before automatic Pages deployment; physical Apple-device behavior has not been certified here.
+
 # 1.1.0 — 1 November 2026
 
 See [memory tracking and reading update](MEMORY-TRACKING-UPDATE.md) for behavior, compatibility and installation details.

@@ -108,7 +108,7 @@ test("daily session automatically teaches sequential verses and saves durable re
   for (let i = 0; i < 2; i++) {
     await expect(
       page.getByText(`${i + 1} of 2 passages`, { exact: true }),
-    ).toBeVisible();
+    ).toHaveCount(0);
     await expect(page.getByLabel("Memorization method")).toHaveCount(0);
     await learnPassage(page, psalm[i]);
     await page
@@ -122,7 +122,8 @@ test("daily session automatically teaches sequential verses and saves durable re
     page.getByRole("heading", { name: "All set for now.", exact: true }),
   ).toBeVisible();
   const attempts = (await records(page)).filter(
-    (row) => row.kind === "attempt",
+    (row) =>
+      row.kind === "attempt" && !row.data.unitId.startsWith("reference:"),
   );
   expect(attempts).toHaveLength(2);
   expect(
