@@ -1,0 +1,78 @@
+.sync-settings .sync-status {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+  font-weight: 500;
+}
+.sync-settings .sync-status > span {
+  flex: 0 0 8px;
+  width: 8px;
+  height: 8px;
+  border: 1px solid currentColor;
+  border-radius: 50%;
+}
+.sync-settings .sync-status > span.connected {
+  background: currentColor;
+}
+.sync-settings .sync-last {
+  margin-top: 0;
+  font-size: 0.8125rem;
+}
+.sync-settings .sync-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.sync-settings .sync-actions > button {
+  max-width: 100%;
+  white-space: normal;
+}
+.sync-settings .sync-setup,
+.sync-settings .sync-code {
+  margin: 24px 0;
+  padding: 20px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+}
+.sync-settings .sync-setup > p,
+.sync-settings .sync-code > p {
+  font-size: 0.875rem;
+}
+.sync-settings .sync-code > h3 {
+  margin-top: 0;
+}
+.sync-settings textarea {
+  min-height: 112px;
+  overflow-wrap: anywhere;
+  word-break: break-all;
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-size: 1rem;
+  direction: ltr;
+}
+.sync-settings input {
+  font-size: 1rem;
+}
+.sync-settings .sync-error {
+  padding: 12px 16px;
+  border-left: 2px solid var(--error);
+  color: var(--error);
+  overflow-wrap: anywhere;
+}
+.sync-settings .sync-privacy {
+  margin-top: 24px;
+  font-size: 0.8125rem;
+}
+.sync-settings .sync-device-options {
+  margin-bottom: 0;
+}
+@media (max-width: 480px) {
+  .sync-settings .sync-setup,
+  .sync-settings .sync-code {
+    padding: 16px;
+  }
+  .sync-settings .sync-actions > button {
+    flex: 1 1 160px;
+  }
+}

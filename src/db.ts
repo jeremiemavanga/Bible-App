@@ -10,9 +10,12 @@ import {
 export class WordDB extends Dexie {
   records!: Table<Entry, string>;
   bible!: Table<{ id: string; books: BibleBook[] }, string>;
+  /** Device credentials and sync versions are never included in personal exports. */
+  sync!: Table<{ id: string; value: unknown }, string>;
   constructor(name = "word-within") {
     super(name);
     this.version(1).stores({ records: "id,kind", bible: "id" });
+    this.version(2).stores({ records: "id,kind", bible: "id", sync: "id" });
   }
 }
 export const db = new WordDB();

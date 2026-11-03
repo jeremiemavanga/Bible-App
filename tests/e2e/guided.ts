@@ -18,7 +18,7 @@ export async function learnPassage(page: Page, text: string) {
   await page
     .getByRole("button", { name: "Continue with fewer cues", exact: true })
     .click();
-  await page.getByLabel("First letters", { exact: true }).fill(initials(text));
+  await page.getByLabel("Full words", { exact: true }).fill(text);
   await page
     .getByRole("button", { name: "Try from memory", exact: true })
     .click();

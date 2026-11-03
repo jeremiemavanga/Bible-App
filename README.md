@@ -1,8 +1,10 @@
 # The Word Within
 
-A private, offline-first Scripture memorization PWA built against the approved eight-stage specification. React + TypeScript + Vite, Dexie/IndexedDB, a precaching service worker, Web Crypto encrypted exports, and Vitest/Playwright checks. No accounts or automatic sync. The interface follows the [latest paper-and-ink visual reference](docs/PAPER-VISUAL-DIRECTION.md), superseding the earlier dark palette.
+A private, offline-first Scripture memorization PWA built against the approved eight-stage specification. React + TypeScript + Vite, Dexie/IndexedDB, a precaching service worker, Web Crypto encrypted exports, and Vitest/Playwright checks. Personal data stays local unless you explicitly connect optional encrypted device sync. The interface follows the [latest paper-and-ink visual reference](docs/PAPER-VISUAL-DIRECTION.md), superseding the earlier dark palette.
 
 ## Latest improvements
+
+[Meaningful cued practice and optional device sync 1.3.0](docs/CUED-PRACTICE-AND-SYNC.md): full-word typing when initials are visible, hidden-cue first-letter recall, and encrypted progress sharing through a separately configured private service. Existing installations keep their local progress.
 
 [Practice focus and reference recall 1.2.0](docs/FOCUS-REFERENCE-UPDATE.md): a dedicated practice surface, wording followed by address recall, independent reference reviews, and offline reference-draft recovery.
 

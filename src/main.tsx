@@ -82,6 +82,8 @@ import { flushDrafts, useLocalDraft } from "./drafts";
 import { GuidedPractice } from "./guided-practice";
 import { automaticQueue, passageId, reviewFor, resumeQueue } from "./automatic";
 import { validTranslation } from "./validation";
+import { SyncSettings } from "./sync-settings";
+import { getSyncStatus, startSync } from "./sync";
 import "./style.css";
 const updateSW = registerSW({
   onNeedRefresh() {
@@ -150,6 +152,7 @@ function App() {
     }
   };
   useEffect(() => {
+    const stopSync = startSync();
     void run(async () => {
       const loaded = await loadBible();
       await reconcileReviews();
@@ -158,9 +161,11 @@ function App() {
     }, "");
     const on = () => setOffline(!navigator.onLine),
       upd = () => setUpdate(true);
+    const synced = () => void refresh().catch(() => {});
     window.addEventListener("online", on);
     window.addEventListener("offline", on);
     window.addEventListener("app-update", upd);
+    window.addEventListener("sync-records-changed", synced);
     navigator.serviceWorker?.ready.then(() => {
       const check = async () => {
         const keys = await caches.keys();
@@ -180,9 +185,11 @@ function App() {
       setTimeout(check, 3000);
     });
     return () => {
+      stopSync();
       window.removeEventListener("online", on);
       window.removeEventListener("offline", on);
       window.removeEventListener("app-update", upd);
+      window.removeEventListener("sync-records-changed", synced);
     };
   }, []);
   const prefs =
@@ -288,6 +295,7 @@ function App() {
   useEffect(() => {
     if (practiceFocus)
       document.querySelectorAll("audio").forEach((player) => player.pause());
+    window.dispatchEvent(new Event("practice-focus-changed"));
   }, [practiceFocus]);
   return (
     <>
@@ -989,8 +997,9 @@ function Today(c: Ctx) {
         <div>
           <strong>Saved on this device</strong>
           <p>
-            No account or automatic sync. Browser storage can be cleared or
-            removed by your device. Keep an encrypted copy outside the app.
+            Connect your devices in Settings for optional encrypted sync. Keep
+            an encrypted backup outside the app in case device storage is
+            cleared.
           </p>
           <small>
             {c.prefs.lastBackup
@@ -3974,6 +3983,7 @@ function Settings(c: Ctx) {
           for device-managed reminders; no journal or review data is included.
         </p>
       </section>
+      <SyncSettings />
       <section>
         <h2>Encrypted backup & transfer</h2>
         <details className="transfer-guide">
@@ -4001,8 +4011,8 @@ function Settings(c: Ctx) {
             </li>
           </ol>
           <p>
-            Each device keeps its own copy. Later edits stay on the device where
-            you make them until you transfer another backup.
+            Each device keeps its own copy. Without optional device sync, later
+            edits stay where you make them until you transfer another backup.
           </p>
         </details>
         <p>
@@ -4014,8 +4024,9 @@ function Settings(c: Ctx) {
           storage can be removed by you or the operating system.
         </p>
         <p>
-          Transfer an encrypted file manually between iPhone, iPad and Mac. This
-          is not automatic synchronization. Lost passwords cannot be recovered.
+          Transfer an encrypted file manually between iPhone, iPad and Mac.
+          Automatic device sync is optional and configured above. Lost backup
+          passwords cannot be recovered.
         </p>
         <label>
           Backup password (at least 12 characters)
@@ -4149,6 +4160,10 @@ function Settings(c: Ctx) {
               disabled={!confirmed}
               onClick={() =>
                 void c.run(async () => {
+                  if (restoreMode === "replace" && getSyncStatus().connected)
+                    throw Error(
+                      "Disconnect this device from sync before replacing its data. Merge remains available while connected.",
+                    );
                   await db.transaction("rw", db.records, async () => {
                     if (restoreMode === "replace") await db.records.clear();
                     for (const record of preview.records)
@@ -4171,11 +4186,14 @@ function Settings(c: Ctx) {
       <section>
         <h2>Storage & privacy</h2>
         <p>
-          Personal data lives in IndexedDB on this device. No account,
-          analytics, remote fonts, advertising, or automatic uploads. Static
-          hosting sees requests for app files and its usual access logs; it
-          receives no notes, projects or review history from this app. Local
-          storage is not encrypted at rest; protect your device.
+          Personal data is saved on this device first. Nothing is uploaded
+          unless you connect optional sync. Connected devices send encrypted
+          progress to your chosen sync service; its operator cannot read the
+          contents without your private connection code. Imported audio, images
+          and translations remain local. GitHub Pages hosts app files and
+          receives no practice history. There are no analytics, advertising or
+          remote fonts. Protect your device: its local storage is not encrypted
+          by this app.
         </p>
         <button
           onClick={() =>
@@ -4218,7 +4236,8 @@ function Settings(c: Ctx) {
           <li>Mac (Safari 17 or later): File → Add to Dock.</li>
           <li>
             Open the installed app, enable Airplane Mode and confirm the Bible
-            and practice load. Import a backup separately on each device.
+            and practice load. Restore a backup or connect your private sync
+            space on each device.
           </li>
         </ol>
         <p>

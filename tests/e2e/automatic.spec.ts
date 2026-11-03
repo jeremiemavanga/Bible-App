@@ -132,7 +132,7 @@ test("one tap starts first-letter learning, removes setup decisions and saves au
     ),
   ).toBe(true);
   await page.evaluate(() => (document.documentElement.style.fontSize = ""));
-  await page.getByLabel("First letters", { exact: true }).fill(initials(psalm));
+  await page.getByLabel("Full words", { exact: true }).fill(psalm);
   await page
     .getByRole("button", { name: "Try from memory", exact: true })
     .click();
@@ -166,7 +166,7 @@ test("one tap starts first-letter learning, removes setup decisions and saves au
   await expect(page.getByLabel("Optional private reflection")).toHaveCount(0);
 });
 
-test("offline reload resumes the exact cue level, letters and remaining passage queue", async ({
+test("offline reload resumes the exact cue level, partial words and remaining passage queue", async ({
   page,
   context,
 }) => {
@@ -189,8 +189,8 @@ test("offline reload resumes the exact cue level, letters and remaining passage 
   await page
     .getByRole("button", { name: "Continue with fewer cues", exact: true })
     .click();
-  const partial = initials(books[18].chapters[116][0]).slice(0, 4);
-  await page.getByLabel("First letters", { exact: true }).fill(partial);
+  const partial = "O praise the LO";
+  await page.getByLabel("Full words", { exact: true }).fill(partial);
   await expect
     .poll(async () => {
       const saved = await rows(page);
@@ -207,12 +207,12 @@ test("offline reload resumes the exact cue level, letters and remaining passage 
   await expect(
     page.getByRole("heading", { name: "A little less help.", exact: true }),
   ).toBeVisible();
-  await expect(page.getByLabel("First letters", { exact: true })).toHaveValue(
+  await expect(page.getByLabel("Full words", { exact: true })).toHaveValue(
     partial,
   );
   await page
-    .getByLabel("First letters", { exact: true })
-    .fill(initials(books[18].chapters[116][0]));
+    .getByLabel("Full words", { exact: true })
+    .fill(books[18].chapters[116][0]);
   await page
     .getByRole("button", { name: "Try from memory", exact: true })
     .click();

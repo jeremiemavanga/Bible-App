@@ -4,7 +4,7 @@ The authoritative baseline is [APPROVED-SPECIFICATION.md](APPROVED-SPECIFICATION
 
 ## Data and review design
 
-IndexedDB (`word-within`, schema 1) contains a canonical KJV corpus table and a typed personal-record table indexed by stable `id` and `kind`. UUIDs identify user records and immutable attempts. Deterministic memory-unit identifiers distinguish `verse:book:chapter:verse`, `chapter:book:chapter` and noncontiguous passage scopes. A separate review record references each unit. No network service is involved in personal persistence.
+IndexedDB (`word-within`, schema 2) contains a canonical KJV corpus table, a typed personal-record table indexed by stable `id` and `kind`, and separate opt-in sync metadata. Existing schema-1 records are retained. UUIDs identify user records and immutable attempts. Deterministic memory-unit identifiers distinguish `verse:book:chapter:verse`, `chapter:book:chapter` and noncontiguous passage scopes. A separate review record references each unit. Local persistence works without any network service; optional encrypted sharing is described in [the 1.3 update](CUED-PRACTICE-AND-SYNC.md).
 
 The scheduler has six stages with 1, 3, 7, 30, 90-day promotion intervals and a 365-day maximum lifelong interval. Only near-exact, confident, unassisted recall promotes. Hints and difficulty slow scheduling; inaccurate recall regresses. Missed reviews retain their original due date until practiced; the next interval begins with the actual attempt. The retention estimate is a transparent exponential heuristic, not a clinical or scientifically calibrated prediction. Reviews come first and adaptive plans introduce previously unintroduced verses in canonical project order. Complete chapter recitations have independent review state, never graduate out of review, and test transitions as well as words. Book projects progress through verses/chapters; choose recitation sections for very long projects.
 
@@ -12,7 +12,7 @@ Word grading normalizes Unicode, case, punctuation and apostrophes. It performs 
 
 ## Privacy and security
 
-The app has no accounts, server database, telemetry, remote fonts, third-party content calls, or automatic sync. Personal data and imported files remain in IndexedDB. Only same-origin static-file requests are made. Hosting providers can keep their normal access logs. Content Security Policy restricts connections and scripts to the same origin. Notes render as text, never HTML. Local data is not encrypted at rest; rely on device security and encrypted backups. OS eviction and user deletion remain possible even after requesting persistent storage.
+The app has no required account, telemetry, remote fonts or third-party content calls. Personal data and imported files are saved in IndexedDB. With sync off, only same-origin static-file requests are made. After explicit connection, progress records are encrypted on the device and shared through the configured HTTPS sync endpoint. Imported media and translations remain local. The private connection code contains the decryption key and read/write credential; it is not included in backups, app assets or request bodies. Hosting providers can keep their normal access logs. Content Security Policy keeps scripts on the same origin and allows HTTPS connections for the user-configured sync service, plus loopback HTTP for development. Notes render as text, never HTML. Local data is not encrypted at rest; rely on device security and encrypted backups. OS eviction and user deletion remain possible even after requesting persistent storage.
 
 Manual journal and collection JSON exports are deliberately unencrypted and labelled accordingly. Encrypted backups protect transfer of all personal records and imported media. See [BACKUP.md](BACKUP.md). Import preview and explicit confirmation precede an atomic restore transaction.
 
@@ -24,7 +24,7 @@ Audio imports accept locally selected browser-supported audio files below 100 MB
 
 ## Updating and hosting
 
-`npm run build` produces a static `dist/` with an installable manifest, Apple touch icon and generated service worker. The entire core and KJV package are precached. First provisioning requires connectivity. The offline indicator verifies the versioned precache rather than relying on a port or service-worker registration alone. An update prompt lets the user finish work before reloading. Use HTTPS; serve the app at the origin root. Do not configure a backend for notes. See [APPLE-INSTALL.md](APPLE-INSTALL.md).
+`npm run build` produces a static `dist/` with an installable manifest, Apple touch icon and generated service worker. The entire core and KJV package are precached. First provisioning requires connectivity. The offline indicator verifies the versioned precache rather than relying on a port or service-worker registration alone. An update prompt lets the user finish work before reloading. Use HTTPS and the same installed-app origin/path to preserve local data. Optional sync uses the separate opaque-storage worker in [sync-server](../sync-server/README.md); it must never receive plaintext notes or the encryption key. See [APPLE-INSTALL.md](APPLE-INSTALL.md).
 
 ## Approved visual design
 

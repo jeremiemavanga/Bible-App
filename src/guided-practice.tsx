@@ -11,6 +11,7 @@ import {
 import { flushSync } from "react-dom";
 import {
   label,
+  normalize,
   textFor,
   type BibleBook,
   type Entry,
@@ -20,7 +21,9 @@ import {
 import { flushDrafts, useLocalDraft } from "./drafts";
 import {
   acceptInitials,
+  acceptCuedWords,
   automaticMode,
+  expandCuedInitials,
   guidedWords,
   passageId,
   reviewFor,
@@ -87,18 +90,33 @@ export function GuidedPractice({
     hints: 0,
   });
   const guide: GuidedDraft = draft.value.guided ?? initial;
+  const expected = refs.map((ref) => textFor(books, ref)).join(" ");
+  const words = useMemo(() => guidedWords(expected), [expected]);
+  const cued = guide.phase === "cues";
+  const legacyCues = cued && guide.cueInput !== "words";
+  const cueText = legacyCues
+    ? expandCuedInitials(expected, draft.value.text)
+    : draft.value.text;
+  const cueResult = cued ? acceptCuedWords(expected, cueText) : undefined;
   useEffect(() => {
     if (
       draft.ready &&
-      (JSON.stringify(guide.remaining) !== JSON.stringify(remaining) ||
+      (legacyCues ||
+        JSON.stringify(guide.remaining) !== JSON.stringify(remaining) ||
         JSON.stringify(guide.referenceRemaining ?? []) !==
           JSON.stringify(referenceRemaining))
     ) {
-      draft.update({ guided: { ...guide, remaining, referenceRemaining } });
+      draft.update({
+        ...(legacyCues ? { text: cueText } : {}),
+        guided: {
+          ...guide,
+          remaining,
+          referenceRemaining,
+          ...(legacyCues ? { cueInput: "words" as const } : {}),
+        },
+      });
     }
-  }, [draft.ready, remaining, referenceRemaining]);
-  const expected = refs.map((ref) => textFor(books, ref)).join(" ");
-  const words = useMemo(() => guidedWords(expected), [expected]);
+  }, [draft.ready, remaining, referenceRemaining, legacyCues]);
   const heatLevels = useMemo(
     () =>
       refs.flatMap((ref) =>
@@ -117,9 +135,9 @@ export function GuidedPractice({
   const heading = useRef<HTMLHeadingElement>(null);
   const referenceInput = useRef<HTMLInputElement>(null);
   const pauseDialog = useRef<HTMLDialogElement>(null);
-  const ready = draft.ready && !busy;
-  const cursor = [...draft.value.text].length;
-  const complete = cursor === words.length;
+  const ready = draft.ready && !busy && !legacyCues;
+  const cursor = cueResult?.acceptedWords ?? [...draft.value.text].length;
+  const complete = cueResult?.complete ?? cursor === words.length;
   const title = {
     read: "Read it through.",
     follow: "Follow the words.",
@@ -138,7 +156,7 @@ export function GuidedPractice({
       input.current?.focus();
     else if (guide.phase === "reference") referenceInput.current?.focus();
     else heading.current?.focus();
-  }, [guide.phase, draft.ready]);
+  }, [guide.phase, guide.cueInput, draft.ready]);
   // Revealing full words can add lines without replacing the focused input.
   // Move only when necessary, so ordinary typing does not keep scrolling.
   useLayoutEffect(() => {
@@ -198,7 +216,16 @@ export function GuidedPractice({
     setMismatch(false);
     setError("");
     // Keep focus inside the tap handler so Safari can open its keyboard.
-    flushSync(() => draft.update({ text: "", guided: { ...guide, phase } }));
+    flushSync(() =>
+      draft.update({
+        text: "",
+        guided: {
+          ...guide,
+          phase,
+          ...(phase === "cues" ? { cueInput: "words" as const } : {}),
+        },
+      }),
+    );
     if (["follow", "cues", "recall"].includes(phase)) input.current?.focus();
   };
   const save = async (
@@ -366,6 +393,44 @@ export function GuidedPractice({
         });
     }
   };
+  const writeWords = (text: string, hint = false) => {
+    const checked = acceptCuedWords(expected, text);
+    const previous = acceptCuedWords(expected, cueText);
+    // A completed wrong word counts once, even if extra spaces are entered.
+    const newMistake =
+      checked.mismatch &&
+      (!previous.mismatch ||
+        checked.acceptedWords !== previous.acceptedWords ||
+        normalize(text)[checked.acceptedWords] !==
+          normalize(cueText)[previous.acceptedWords]);
+    setMismatch(checked.mismatch);
+    draft.update({
+      text,
+      hints: (draft.value.hints ?? 0) + Number(hint),
+      guided: {
+        ...guide,
+        cueInput: "words",
+        mistakes: guide.mistakes + Number(newMistake),
+        wordTrackingIncomplete:
+          guide.wordTrackingIncomplete ||
+          (guide.mistakes > 0 && guide.missedWords === undefined),
+        missedWords: [
+          ...new Set([
+            ...(guide.missedWords ?? []),
+            ...(checked.mismatch
+              ? [Math.min(checked.acceptedWords, words.length - 1)]
+              : []),
+          ]),
+        ],
+        hintedWords: [
+          ...new Set([
+            ...(guide.hintedWords ?? []),
+            ...(hint ? [Math.min(cursor, words.length - 1)] : []),
+          ]),
+        ],
+      },
+    });
+  };
   const comparison =
     guide.phase === "feedback" && guide.outcome?.evidence === "typed"
       ? gradePassage(
@@ -437,7 +502,11 @@ export function GuidedPractice({
       {["follow", "cues", "recall"].includes(guide.phase) && (
         <>
           <p className="guided-instruction">
-            Type the first letter of each word. The words appear as you go.
+            {cued
+              ? "Use the initials to recall each full word. Press Space after each word."
+              : guide.phase === "follow"
+                ? "Read along and type each word’s first letter. This is guided rehearsal."
+                : "Recall each word, then type its first letter. No letter cues are shown."}
           </p>
           <div
             className="guided-words"
@@ -486,23 +555,30 @@ export function GuidedPractice({
             })}
           </div>
           <label className="initials-label">
-            First letters
+            {cued ? "Full words" : "First letters"}
             <input
               ref={input}
               className="initials-input"
-              value={draft.value.text}
-              onChange={(event) => writeInitials(event.target.value)}
-              disabled={!ready || complete}
+              value={cued ? cueText : draft.value.text}
+              onChange={(event) =>
+                cued
+                  ? writeWords(event.target.value)
+                  : writeInitials(event.target.value)
+              }
+              maxLength={200000}
+              disabled={!ready}
+              readOnly={complete}
               autoComplete="off"
               autoCorrect="off"
               autoCapitalize="off"
               spellCheck={false}
               aria-describedby="initials-help"
               onKeyDown={(event) => {
-                if (event.key === "Enter" && complete) {
+                if (event.key === "Enter") {
                   event.preventDefault();
-                  if (guide.phase === "follow") move("cues");
-                  else if (guide.phase === "cues") move("recall");
+                  if (complete && guide.phase === "follow") move("cues");
+                  else if (complete && cued) move("recall");
+                  else if (cued) writeWords(cueText + " ");
                 }
               }}
             />
@@ -512,8 +588,12 @@ export function GuidedPractice({
             id="initials-help"
             role="status"
           >
-            {mismatch ? (
-              "That letter doesn’t match. Try again, or use a hint."
+            {(cued ? cueResult?.mismatch : mismatch) ? (
+              cued ? (
+                "That word doesn’t match. Check the full word, or use a hint."
+              ) : (
+                "That letter doesn’t match. Try again, or use a hint."
+              )
             ) : (
               <span className="sr-only">
                 {busy
@@ -545,7 +625,18 @@ export function GuidedPractice({
               className="guided-hint"
               disabled={!ready}
               onClick={() =>
-                writeInitials(draft.value.text + words[cursor].initial, true)
+                cued
+                  ? writeWords(
+                      words
+                        .slice(0, cursor + 1)
+                        .map((word) => word.text)
+                        .join(" ") + " ",
+                      true,
+                    )
+                  : writeInitials(
+                      draft.value.text + words[cursor].initial,
+                      true,
+                    )
               }
             >
               Help with this word

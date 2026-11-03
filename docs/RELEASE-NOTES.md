@@ -1,3 +1,9 @@
+# 1.3.0 — 3 November 2026
+
+See [meaningful cued practice and optional device sync](CUED-PRACTICE-AND-SYNC.md). Visible initial cues now require full-word answers; first-letter recall hides future cues. Encrypted sync is optional and requires separately deployed service setup. Existing local progress and offline practice remain available.
+
+Local verification passed: **175 unit/domain/backup/sync-service checks** and **111 browser scenarios** across desktop, phone and tablet Chromium. The six sync UI scenarios were rerun after correcting their textbox locator and adding the connected-device replacement-restore safeguard; all pass, including encrypted two-context sharing, offline reconnection, mounted draft refresh and cloud deletion without local loss. The 24 targeted cue-flow browser checks also pass. TypeScript, formatting, KJV integrity, root and Pages builds, offline Pages-path smoke check and worker TypeScript pass; a Wrangler dry-run bundles the service successfully. Native WebKit remains required by GitHub verification before Pages deployment. The private sync service has not been provisioned or deployed; it still needs an operator's Cloudflare account and the real two-device acceptance check described in the service instructions.
+
 # 1.2.0 — 2 November 2026
 
 See [practice focus and reference recall](FOCUS-REFERENCE-UPDATE.md) for behavior, compatibility and update instructions.

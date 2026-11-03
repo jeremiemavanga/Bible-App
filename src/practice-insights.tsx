@@ -65,20 +65,23 @@ export function PracticeInsights({
       {checks ? (
         <>
           <p>
-            {Math.round((1 - missed / checks) * 100)}% first-letter accuracy
+            {Math.round((1 - missed / checks) * 100)}% practice-word accuracy
             across {checks} recorded word opportunities.
           </p>
           {hard.slice(0, 30).map((r) => (
             <p key={r.ref + ":" + r.index}>
               <strong>{r.word}</strong> · {label(books, r.ref)} · word{" "}
-              {r.index + 1}: {r.missed}/{r.checks} missed initials · {r.hints}{" "}
+              {r.index + 1}: {r.missed}/{r.checks} missed words · {r.hints}{" "}
               hints
             </p>
           ))}
           {!hard.length && (
             <p>No difficult word positions recorded in this window.</p>
           )}
-          <p>Revisit difficult words in the context of the whole passage.</p>
+          <p>
+            These practice results include first-letter and supported full-word
+            steps. Revisit difficult words in the context of the whole passage.
+          </p>
         </>
       ) : (
         <p>

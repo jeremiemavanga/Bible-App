@@ -121,6 +121,42 @@ export function acceptInitials(text: string, input: string) {
   };
 }
 
+/** Initial cues support retrieval; entering the cue itself is not a full-word answer. */
+export function acceptCuedWords(text: string, input: string) {
+  const expected = normalize(text),
+    incoming = normalize(input),
+    ended = !/[\p{L}\p{N}'’‘-]$/u.test(input);
+  let acceptedWords = 0;
+  for (let index = 0; index < incoming.length; index++) {
+    const last = index === incoming.length - 1;
+    const finalWord = index === expected.length - 1;
+    const committed =
+      index >= expected.length ||
+      !last ||
+      ended ||
+      (finalWord && incoming[index] === expected[index]);
+    if (!committed) return { acceptedWords, mismatch: false, complete: false };
+    if (incoming[index] !== expected[index])
+      return { acceptedWords, mismatch: true, complete: false };
+    acceptedWords++;
+  }
+  return {
+    acceptedWords,
+    mismatch: false,
+    complete: expected.length > 0 && acceptedWords === expected.length,
+  };
+}
+
+/** Legacy drafts stored only accepted initials during the supported cue step. */
+export function expandCuedInitials(text: string, input: string) {
+  const accepted = acceptInitials(text, input).accepted.length;
+  const prefix = guidedWords(text)
+    .slice(0, accepted)
+    .map((word) => word.text)
+    .join(" ");
+  return prefix ? prefix + " " : "";
+}
+
 export function reviewFor(
   records: Entry[],
   unitId: string,

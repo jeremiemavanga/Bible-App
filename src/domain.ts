@@ -155,6 +155,7 @@ export interface GuidedDraft {
     | "reference"
     | "feedback";
   mode: "learn" | "recall";
+  cueInput?: "words";
   token: string;
   remaining: Ref[][];
   referenceOnly?: boolean;

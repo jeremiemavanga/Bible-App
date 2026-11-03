@@ -24,6 +24,29 @@ export function useLocalDraft(key: string, initial: LocalDraft) {
   useEffect(() => {
     mounted.current = true;
     let active = true;
+    const synced = () => {
+      const previous = current.current;
+      const pending = chain.current;
+      void pending
+        .then(() => db.records.get(key))
+        .then((record) => {
+          // Do not replace typing that began after this refresh, or an
+          // unsaved local edit. Sync defers foreground pulls while editing.
+          if (
+            !active ||
+            previous !== current.current ||
+            pending !== chain.current ||
+            failedDrafts.has(key)
+          )
+            return;
+          const next = record?.kind === "draft" ? record.data : initial;
+          current.current = next;
+          setValue(next);
+          setStatus("saved");
+        })
+        .catch(() => {});
+    };
+    window.addEventListener("sync-records-changed", synced);
     void db.records
       .get(key)
       .then((record) => {
@@ -40,6 +63,7 @@ export function useLocalDraft(key: string, initial: LocalDraft) {
     return () => {
       active = false;
       mounted.current = false;
+      window.removeEventListener("sync-records-changed", synced);
     };
   }, [key]);
   const update = (patch: Partial<LocalDraft>) => {

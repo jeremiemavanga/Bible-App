@@ -12,11 +12,11 @@ For a new passage, the flow is:
 
 1. Read the KJV passage.
 2. Type each word's first letter with the wording visible.
-3. Repeat with first-letter cues.
+3. Type the full words with first-letter cues. Copying the initials cannot complete this step.
 4. Recall with those cues hidden. Words appear as their initials are entered.
 5. The app saves the lesson automatically and offers the next passage or a simple finish.
 
-After a completed lesson, the next exercise starts with recall. Difficult or assisted independent recalls bring back the learning steps automatically. First letters remain the default; full-verse typing is an optional action under More options. Incorrect initials do not advance the cursor; requested hints and mistakes are retained. The input keeps focus between learning steps, and its saved value, cue level and remaining passage queue recover after offline reload.
+After a completed lesson, the next exercise starts with recall. Difficult or assisted independent recalls bring back the learning steps automatically. First letters remain the default for hidden-cue recall; full-verse checking from memory is an optional action under More options. In the supported cue step, complete words are required, correct words reveal in the flowing passage, and incomplete words can be resumed offline. Incorrect input does not advance the cursor; requested hints and mistakes are retained. The input keeps focus between learning steps, and its saved value, cue level and remaining passage queue recover after offline reload.
 
 The normal finish is **Done for today**. Reflection and prayer remain available by invitation. They are not mandatory forms between practice and completion. Session duration, starting-passage customization, plan counts, project creation and manual methods are available through disclosures.
 
@@ -38,7 +38,7 @@ The new route uses the existing IndexedDB record store and version-2 encrypted b
 
 Each exercise has a durable attempt token. Verse and complete-passage writes happen in one transaction. Retrying the token after interruption returns the committed result without duplicating attempts or scheduling twice. Failure before commit rolls back the whole review. Failure saving the feedback draft leaves the committed review intact and supports a safe retry after reopening.
 
-All selection, grading and adaptation happen locally. No AI service, microphone, account, analytics or synchronization backend is added. Existing KJV source notices, territorial-rights requirements, authorized-only comparison/audio imports and backup encryption are unchanged.
+All selection, grading and adaptation happen locally. No AI service, microphone, account or analytics is required. Optional encrypted device synchronization is described in [the 1.3 update](CUED-PRACTICE-AND-SYNC.md); it stays disabled until explicitly connected. Existing KJV source notices, territorial-rights requirements, authorized-only comparison/audio imports and backup encryption are unchanged.
 
 ## Verification
 

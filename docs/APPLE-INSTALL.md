@@ -7,7 +7,7 @@ For this repository’s GitHub Pages site, first follow [GITHUB-PAGES.md](GITHUB
 3. Open the HTTPS address in Safari. Wait for **Offline ready**. First provisioning includes the entire 66-book KJV corpus (approximately 4 MB). Imported personal media add storage separately.
 4. iPhone/iPad: Share → Add to Home Screen → enable Open as Web App if shown → Add. Open the installed icon once online; installed Safari contexts may have separate storage. Import an encrypted backup into the installed context, not just the Safari tab.
 5. Mac, Safari 17+: File → Add to Dock. Open the installed app and provision/import there.
-6. Transfer `.wwbackup` files manually via Files/AirDrop or a destination you choose. The application itself does not synchronize devices.
+6. Keep regular `.wwbackup` exports in Files/AirDrop or a destination you choose. To share progress automatically, first configure the optional [encrypted sync service](../sync-server/README.md), then connect your devices in Settings. Each device continues to work offline; syncing runs while the app is open and online. GitHub Pages alone cannot store personal progress.
 
 ## Required checks on each physical device (not completed in Linux)
 

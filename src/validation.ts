@@ -84,6 +84,7 @@ export function validateEntry(e: Entry) {
           d.guided?.version === 1 &&
           guidedPhases.includes(d.guided.phase) &&
           ["learn", "recall"].includes(d.guided.mode) &&
+          (d.guided.cueInput === undefined || d.guided.cueInput === "words") &&
           typeof d.guided.token === "string" &&
           d.guided.token.length > 0 &&
           d.guided.token.length <= 128 &&
